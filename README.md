@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -14,3 +15,7 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+=======
+# VirtualStorefront
+Many small businesses have limited skills and resources to create an online presence. These problems can be overcome with the help of a virtual storefront, which will provide a very simple and reasonably priced platform where businesses can show their products and reach out to bigger markets for growth and competitiveness in the digital economy.
+>>>>>>> 909013da349a6c6fe4494a2bd44fb52ff6f25b80
