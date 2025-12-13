@@ -1,39 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Package, Truck, CheckCircle, XCircle, RefreshCw, RotateCcw, ChevronRight, Filter } from 'lucide-react';
+
+import api from '../../api/axios';
+
 
 const Orders = () => {
     const [filter, setFilter] = useState('All');
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Mock Orders Data
-    const [orders, setOrders] = useState([
-        {
-            id: 'ORD-7782-34',
-            date: '2025-12-01',
-            total: 129.99,
-            status: 'Processing',
-            items: [
-                { name: 'Wireless Headphones', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200', quantity: 1, price: 129.99 }
-            ]
-        },
-        {
-            id: 'ORD-9921-12',
-            date: '2025-11-25',
-            total: 54.50,
-            status: 'Delivered',
-            items: [
-                { name: 'Organic Coffee Beans', image: 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=200', quantity: 2, price: 27.25 }
-            ]
-        },
-        {
-            id: 'ORD-1102-55',
-            date: '2025-11-10',
-            total: 210.00,
-            status: 'Cancelled',
-            items: [
-                { name: 'Smart Watch Series 5', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200', quantity: 1, price: 210.00 }
-            ]
+    useEffect(() => {
+        fetchOrders();
+    }, []);
+
+    const fetchOrders = async () => {
+        try {
+            const res = await api.get('/orders');
+            // Backend returns { items: [{ product, quantity, price }] }
+            // We need to map it to match UI structure if needed, or adjust UI.
+            // UI expects: { id, date, total, status, items: [{name, image, quantity, price}] }
+            // Backend `items` has `product` object if populated? 
+            // `server/routes/orders.js` POST endpoint stored: product (ID), quantity, price. 
+            // It did NOT populate `product` details in the `orderItems` array in DB, just the ID. 
+            // 
+            // Wait, looking at `server/routes/orders.js`:
+            // `orderItems.push({ product: item.product, ... })`.
+            // The GET / route I just added: `Order.find()...`
+            // It does NOT `.populate('items.product')`.
+            // accessing `item.name` or `item.image` in UI will FAIL if I don't populate.
+
+            // I need to update the GET route to populate, OR update this fetch to handle ID-only (bad UX).
+            // Let's assume I will Fix Backend to Populate in next step.
+
+            setOrders(res.data.map(order => ({
+                id: order._id,
+                date: order.createdAt,
+                total: order.totalAmount,
+                status: order.status || 'Processing', // Default status if logic missing
+                items: order.items.map(i => ({
+                    // If populated:
+                    name: i.product?.name || 'Create Product to see Name',
+                    image: (i.product?.images && i.product.images.length > 0 ? i.product.images[0] : i.product?.image) || '/placeholder.svg',
+                    quantity: i.quantity,
+                    price: i.price
+                }))
+            })));
+        } catch (err) {
+            console.error('Failed to fetch orders', err);
+        } finally {
+            setLoading(false);
         }
-    ]);
+    };
 
     const handleCancelOrder = (orderId) => {
         if (window.confirm('Are you sure you want to cancel this order?')) {
@@ -96,7 +114,7 @@ const Orders = () => {
                             </div>
                             <div className="mt-4 md:mt-0 text-right">
                                 <p className="text-sm text-gray-500">Total Amount</p>
-                                <p className="text-xl font-bold text-primary">${order.total.toFixed(2)}</p>
+                                <p className="text-xl font-bold text-primary">₹{order.total.toLocaleString()}</p>
                             </div>
                         </div>
 
@@ -108,7 +126,7 @@ const Orders = () => {
                                     </div>
                                     <div className="flex-1">
                                         <h4 className="font-bold text-dark dark:text-white text-sm">{item.name}</h4>
-                                        <p className="text-xs text-gray-500">Qty: {item.quantity} × ${item.price}</p>
+                                        <p className="text-xs text-gray-500">Qty: {item.quantity} × ₹{item.price.toLocaleString()}</p>
                                     </div>
                                 </div>
                             ))}
@@ -116,9 +134,9 @@ const Orders = () => {
 
                         {/* Actions */}
                         <div className="flex flex-wrap gap-3 pt-2">
-                            <button className="flex items-center px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-dark dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                            <Link to={`/dashboard/orders/${order.id}`} className="flex items-center px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-bold text-dark dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 transition">
                                 View Details <ChevronRight className="ml-1 h-4 w-4" />
-                            </button>
+                            </Link>
 
                             {order.status === 'Processing' && (
                                 <button

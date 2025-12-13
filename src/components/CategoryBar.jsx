@@ -1,16 +1,17 @@
+
 import { Link } from 'react-router-dom';
 import { Smartphone, Shirt, Laptop, Armchair, Tv, Plane, Gift, ShoppingBasket, Zap } from 'lucide-react';
 
 const categories = [
-    { name: 'Top Offers', icon: Zap, path: '/shop?category=offers' },
-    { name: 'Mobiles', icon: Smartphone, path: '/shop?category=mobiles' },
-    { name: 'Fashion', icon: Shirt, path: '/shop?category=fashion' },
-    { name: 'Electronics', icon: Laptop, path: '/shop?category=electronics' },
-    { name: 'Home', icon: Armchair, path: '/shop?category=home' },
-    { name: 'Appliances', icon: Tv, path: '/shop?category=appliances' },
-    { name: 'Travel', icon: Plane, path: '/shop?category=travel' },
-    { name: 'Beauty', icon: Gift, path: '/shop?category=beauty' },
-    { name: 'Grocery', icon: ShoppingBasket, path: '/shop?category=grocery' },
+    { name: 'Top Offers', icon: Zap, path: '/shop?category=offers' }, // 'offers' might need special handling if not a real category
+    { name: 'Mobiles', icon: Smartphone, path: '/shop?category=Mobiles' },
+    { name: 'Fashion', icon: Shirt, path: '/shop?category=Fashion' },
+    { name: 'Electronics', icon: Laptop, path: '/shop?category=Electronics' },
+    { name: 'Home', icon: Armchair, path: '/shop?category=Home' },
+    { name: 'Appliances', icon: Tv, path: '/shop?category=Appliances' },
+    { name: 'Travel', icon: Plane, path: '/shop?category=Travel' },
+    { name: 'Beauty', icon: Gift, path: '/shop?category=Beauty' },
+    { name: 'Grocery', icon: ShoppingBasket, path: '/shop?category=Grocery' },
 ];
 
 const CategoryBar = () => {

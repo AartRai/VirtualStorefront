@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { MapPin, CreditCard, Truck, Wallet, Check, Plus, Trash2, Tag } from 'lucide-react';
+import { MapPin, CreditCard, Truck, Wallet, Check, Plus, Trash2, Tag, Smartphone } from 'lucide-react';
+import MockPaymentModal from '../components/MockPaymentModal';
 
 const Checkout = () => {
     const { cartItems, cartTotal, subtotal, discountAmount, discount, applyCoupon, removeCoupon, coupon, clearCart } = useCart();
@@ -10,11 +11,12 @@ const Checkout = () => {
     const navigate = useNavigate();
 
     const [step, setStep] = useState(1); // 1: Address, 2: Payment
-    const [selectedAddress, setSelectedAddress] = useState(addresses.length > 0 ? addresses[0].id : null);
+    const [selectedAddress, setSelectedAddress] = useState(addresses.length > 0 ? (addresses[0]._id || addresses[0].id) : null);
     const [paymentMethod, setPaymentMethod] = useState('card');
     const [couponInput, setCouponInput] = useState('');
     const [couponMessage, setCouponMessage] = useState('');
     const [isAddingAddress, setIsAddingAddress] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [newAddress, setNewAddress] = useState({ name: '', street: '', city: '', state: '', zip: '' });
 
     // Redirect if cart is empty
@@ -42,18 +44,51 @@ const Checkout = () => {
         setNewAddress({ name: '', street: '', city: '', state: '', zip: '' });
     };
 
-    const handlePlaceOrder = () => {
-        // Simulate order processing
-        setTimeout(() => {
+    const handlePlaceOrder = async (paymentDetails = null) => {
+        try {
+            // Prepare payload
+            const items = cartItems.map(item => ({
+                product: item._id,
+                quantity: item.quantity
+            }));
+
+            const payload = {
+                items,
+                paymentInfo: paymentDetails || {
+                    status: 'Pending',
+                    method: paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online'
+                }
+            };
+
+            // Attempt to submit to backend
+            const res = await import('../api/axios').then(m => m.default.post('/orders', payload));
+
             clearCart();
             navigate('/order-confirmation', {
                 state: {
-                    orderId: Math.floor(Math.random() * 1000000),
+                    orderId: res.data._id,
                     total: cartTotal,
-                    address: addresses.find(a => a.id === selectedAddress)
+                    address: addresses.find(a => (a._id || a.id) === selectedAddress) || newAddress
                 }
             });
-        }, 1500);
+
+        } catch (err) {
+            console.error("Order Failed:", err);
+            alert('Order Failed: ' + (err.response?.data?.message || err.message));
+        }
+    };
+
+    const handlePaymentSuccess = (details) => {
+        setShowPaymentModal(false);
+        handlePlaceOrder(details);
+    };
+
+    const handleProceed = () => {
+        if (paymentMethod === 'online') {
+            setShowPaymentModal(true);
+        } else {
+            handlePlaceOrder(); // COD
+        }
     };
 
     return (
@@ -80,15 +115,15 @@ const Checkout = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {addresses.map((addr) => (
                                             <div
-                                                key={addr.id}
-                                                onClick={() => setSelectedAddress(addr.id)}
-                                                className={`border-2 rounded-2xl p-4 cursor-pointer transition relative ${selectedAddress === addr.id ? 'border-primary bg-orange-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'}`}
+                                                key={addr._id || addr.id}
+                                                onClick={() => setSelectedAddress(addr._id || addr.id)}
+                                                className={`border-2 rounded-2xl p-4 cursor-pointer transition relative ${selectedAddress === (addr._id || addr.id) ? 'border-primary bg-orange-50 dark:bg-gray-700' : 'border-gray-200 dark:border-gray-700 hover:border-primary/50'}`}
                                             >
-                                                {selectedAddress === addr.id && <div className="absolute top-4 right-4 text-primary"><Check className="h-5 w-5" /></div>}
+                                                {selectedAddress === (addr._id || addr.id) && <div className="absolute top-4 right-4 text-primary"><Check className="h-5 w-5" /></div>}
                                                 <div className="font-bold text-dark dark:text-white mb-1">{addr.name}</div>
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">{addr.street}</div>
                                                 <div className="text-sm text-gray-500 dark:text-gray-400">{addr.city}, {addr.state} {addr.zip}</div>
-                                                <button onClick={(e) => { e.stopPropagation(); removeAddress(addr.id); }} className="mt-3 text-xs text-red-500 hover:underline flex items-center"><Trash2 className="h-3 w-3 mr-1" /> Remove</button>
+                                                <button onClick={(e) => { e.stopPropagation(); removeAddress(addr._id || addr.id); }} className="mt-3 text-xs text-red-500 hover:underline flex items-center"><Trash2 className="h-3 w-3 mr-1" /> Remove</button>
                                             </div>
                                         ))}
 
@@ -143,9 +178,7 @@ const Checkout = () => {
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {[
-                                            { id: 'card', name: 'Credit/Debit Card', icon: CreditCard },
-                                            { id: 'upi', name: 'UPI / Netbanking', icon: Wallet },
-                                            { id: 'wallet', name: 'Wallets (Paytm, PhonePe)', icon: Wallet },
+                                            { id: 'online', name: 'Online Payment (UPI/Card/Netbanking)', icon: CreditCard },
                                             { id: 'cod', name: 'Cash on Delivery', icon: Truck },
                                         ].map((method) => (
                                             <div
@@ -162,53 +195,39 @@ const Checkout = () => {
                                         ))}
                                     </div>
 
-                                    {/* Mock Payment Forms */}
-                                    {paymentMethod === 'card' && (
-                                        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl animate-fade-in">
-                                            <div className="space-y-3">
-                                                <input placeholder="Card Number" className="w-full p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" />
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input placeholder="MM/YY" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" />
-                                                    <input placeholder="CVC" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
 
-                                    {paymentMethod === 'upi' && (
-                                        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl animate-fade-in">
-                                            <input placeholder="Enter UPI ID (e.g. user@upi)" className="w-full p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" />
-                                        </div>
-                                    )}
-
-                                    {paymentMethod === 'wallet' && (
-                                        <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-2xl animate-fade-in">
-                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Select your wallet:</p>
-                                            <div className="flex space-x-3">
-                                                <button className="px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-primary text-sm font-bold">Paytm</button>
-                                                <button className="px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-primary text-sm font-bold">PhonePe</button>
-                                                <button className="px-4 py-2 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-primary text-sm font-bold">Amazon Pay</button>
-                                            </div>
-                                        </div>
-                                    )}
 
                                     <div className="pt-4 flex space-x-4">
                                         <button onClick={() => setStep(1)} className="px-6 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full">Back</button>
                                         <button
-                                            onClick={handlePlaceOrder}
+                                            onClick={handleProceed}
                                             className="flex-1 px-8 py-3 bg-dark dark:bg-primary text-white font-bold rounded-full hover:bg-gray-800 dark:hover:bg-orange-600 transition shadow-lg transform active:scale-95"
                                         >
-                                            Place Order (${cartTotal.toFixed(2)})
+                                            Place Order (₹{cartTotal.toLocaleString()})
                                         </button>
                                     </div>
+
+                                    {/* Mock Payment Modal */}
+                                    {showPaymentModal && (
+                                        <MockPaymentModal
+                                            amount={cartTotal}
+                                            onClose={() => setShowPaymentModal(false)}
+                                            onSuccess={handlePaymentSuccess}
+                                            onFailure={(msg) => {
+                                                setShowPaymentModal(false);
+                                                alert(msg);
+                                            }}
+                                        />
+                                    )}
                                 </div>
                             )}
                         </div>
                     </div>
 
+
                     {/* Right Column: Order Summary */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm sticky top-24">
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm relative lg:sticky top-0 lg:top-24">
                             <h2 className="text-xl font-bold text-dark dark:text-white mb-6">Order Summary</h2>
 
                             <div className="space-y-4 mb-6 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
@@ -222,7 +241,7 @@ const Checkout = () => {
                                             <p className="text-xs text-gray-500 dark:text-gray-400">Qty: {item.quantity}</p>
                                         </div>
                                         <div className="font-bold text-dark dark:text-white text-sm">
-                                            ${(item.price * item.quantity).toFixed(2)}
+                                            ₹{(item.price * item.quantity).toLocaleString()}
                                         </div>
                                     </div>
                                 ))}
@@ -231,7 +250,7 @@ const Checkout = () => {
                             <div className="border-t border-gray-100 dark:border-gray-700 pt-4 space-y-2 mb-6">
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Subtotal</span>
-                                    <span>${subtotal.toFixed(2)}</span>
+                                    <span>₹{subtotal.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Shipping</span>
@@ -240,12 +259,12 @@ const Checkout = () => {
                                 {discount > 0 && (
                                     <div className="flex justify-between text-primary font-bold">
                                         <span>Discount ({discount * 100}%)</span>
-                                        <span>-${discountAmount.toFixed(2)}</span>
+                                        <span>-₹{discountAmount.toLocaleString()}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-xl font-bold text-dark dark:text-white pt-2 border-t border-gray-100 dark:border-gray-700 mt-2">
                                     <span>Total</span>
-                                    <span>${cartTotal.toFixed(2)}</span>
+                                    <span>₹{cartTotal.toLocaleString()}</span>
                                 </div>
                             </div>
 

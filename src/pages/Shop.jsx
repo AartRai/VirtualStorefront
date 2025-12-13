@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Filter, Star, ShoppingCart, Heart } from 'lucide-react';
-import { products } from '../data/mockData';
+import { Filter, Star, ShoppingCart, Heart, Loader } from 'lucide-react';
+import api from '../api/axios';
 import { useWishlist } from '../context/WishlistContext';
 
 const Shop = () => {
@@ -9,14 +9,32 @@ const Shop = () => {
     const initialSearch = searchParams.get('search') || '';
     const initialCategory = searchParams.get('category') || 'All';
 
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-    const [priceRange, setPriceRange] = useState(1500);
+    const [priceRange, setPriceRange] = useState(50000); // Increased default for INR
     const [searchQuery, setSearchQuery] = useState(initialSearch);
     const [selectedBrands, setSelectedBrands] = useState([]);
     const [minRating, setMinRating] = useState(0);
     const [sortBy, setSortBy] = useState('popular');
 
     const { isInWishlist, toggleWishlist } = useWishlist();
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                setLoading(true);
+                const res = await api.get('/products');
+                setProducts(res.data);
+                setLoading(false);
+            } catch (err) {
+                console.error("Error fetching products:", err);
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, []);
 
     useEffect(() => {
         setSearchQuery(searchParams.get('search') || '');
@@ -28,26 +46,45 @@ const Shop = () => {
 
     const categories = ['All', 'Fashion', 'Electronics', 'Home', 'Beauty', 'Mobiles', 'Appliances', 'Grocery', 'Travel'];
 
-    // Extract unique brands
-    const brands = [...new Set(products.map(p => p.shop))];
+    // Extract unique brands (using 'shop' as brand/vendor name from real data if available, or just mock it if data structure differs, but assuming products have 'shop' or we use 'user' name)
+    // Note: The product model has 'user', but the aggregate might not populate it by default unless configured.
+    // For now, let's assume the product object structure from the API matches what we need or we adapt.
+    // Looking at Product.js model: fields are name, description, category, price, stock, images.
+    // It does NOT have 'shop' explicitly, it has 'user' (ObjectId).
+    // The previous mock data had 'shop'. We might need to populate 'user' to get the shop name, or adjust this.
+    // Let's check products.js route. It does simply Product.find().
+    // We might need to update the backend to populate 'user' to get the name, OR just disable brand filter/use static for now.
+    // For a robust fix, let's proceed with fetching, and handle missing 'shop' field gracefully (e.g., 'Unknown Shop' or exclude brand filter if empty).
+
+    // Let's map 'shop' to a placeholder if missing, or use 'category' as a proxy for diversity if needed.
+    // Actually, distinct brands are cool. Let's assume for now we might not have it and just use 'Generic' or fail gracefully.
+    const brands = [...new Set(products.map(p => p.shop || 'Local Vendor'))].filter(Boolean);
 
     const filteredProducts = products.filter(product => {
-        const categoryMatch = selectedCategory === 'All' || product.category === selectedCategory;
+        const categoryMatch = selectedCategory === 'All' || product.category.toLowerCase() === selectedCategory.toLowerCase();
         const priceMatch = product.price <= priceRange;
         const searchMatch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            product.shop.toLowerCase().includes(searchQuery.toLowerCase());
-        const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(product.shop);
-        const ratingMatch = product.rating >= minRating;
+            (product.shop && product.shop.toLowerCase().includes(searchQuery.toLowerCase()));
+        const brandMatch = selectedBrands.length === 0 || (product.shop && selectedBrands.includes(product.shop)) || (!product.shop && selectedBrands.includes('Local Vendor'));
+        const ratingMatch = (product.rating || 0) >= minRating;
 
         return categoryMatch && priceMatch && searchMatch && brandMatch && ratingMatch;
     }).sort((a, b) => {
         if (sortBy === 'price-low') return a.price - b.price;
         if (sortBy === 'price-high') return b.price - a.price;
-        if (sortBy === 'newest') return b.id - a.id; // Assuming higher ID is newer
-        if (sortBy === 'rating') return b.rating - a.rating;
-        return b.reviews - a.reviews; // Default to popular (reviews)
+        // if (sortBy === 'newest') return b.id - a.id; // Real DB uses _id (timestamp) usually
+        if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+        if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+        return (b.reviews || 0) - (a.reviews || 0);
     });
 
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader className="w-12 h-12 animate-spin text-primary" />
+            </div>
+        );
+    }
     return (
         <div className="min-h-screen py-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -55,7 +92,7 @@ const Shop = () => {
 
                     {/* Filters Sidebar */}
                     <aside className="w-full md:w-72 flex-shrink-0">
-                        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-8 rounded-[2rem] shadow-lg sticky top-24">
+                        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-8 rounded-[2rem] shadow-lg relative md:sticky top-0 md:top-24">
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center">
                                     <Filter className="h-5 w-5 mr-2 text-primary" />
@@ -64,32 +101,14 @@ const Shop = () => {
                             </div>
 
                             {/* Category Filter */}
-                            <div className="mb-8">
-                                <h3 className="font-bold text-dark dark:text-white mb-4">Categories</h3>
-                                <div className="space-y-3">
-                                    {categories.map(category => (
-                                        <label key={category} className="flex items-center cursor-pointer group">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mr-3 transition ${selectedCategory === category ? 'border-primary bg-primary' : 'border-gray-300 dark:border-gray-600 group-hover:border-primary'}`}>
-                                                {selectedCategory === category && <div className="w-2 h-2 bg-white rounded-full" />}
-                                            </div>
-                                            <input
-                                                type="radio"
-                                                name="category"
-                                                className="hidden"
-                                                checked={selectedCategory === category}
-                                                onChange={() => setSelectedCategory(category)}
-                                            />
-                                            <span className={`text-sm font-medium transition ${selectedCategory === category ? 'text-dark dark:text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-primary'}`}>{category}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+
 
                             {/* Brand Filter */}
+                            {/* Brand Filter - Limited to top 5 */}
                             <div className="mb-8">
                                 <h3 className="font-bold text-dark dark:text-white mb-4">Brands</h3>
                                 <div className="space-y-2">
-                                    {brands.map(brand => (
+                                    {brands.slice(0, 5).map(brand => (
                                         <label key={brand} className="flex items-center cursor-pointer group">
                                             <input
                                                 type="checkbox"
@@ -106,6 +125,11 @@ const Shop = () => {
                                             <span className="ml-3 text-sm text-gray-600 dark:text-gray-400 group-hover:text-primary transition">{brand}</span>
                                         </label>
                                     ))}
+                                    {brands.length > 5 && (
+                                        <div className="text-xs text-gray-400 italic pt-2">
+                                            + {brands.length - 5} more brands
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -139,12 +163,12 @@ const Shop = () => {
                             <div>
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="font-bold text-dark dark:text-white">Max Price</h3>
-                                    <span className="text-primary font-bold">${priceRange}</span>
+                                    <span className="text-primary font-bold">₹{priceRange.toLocaleString()}</span>
                                 </div>
                                 <input
                                     type="range"
                                     min="0"
-                                    max="2000"
+                                    max="200000"
                                     value={priceRange}
                                     onChange={(e) => setPriceRange(Number(e.target.value))}
                                     className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
@@ -178,25 +202,26 @@ const Shop = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
                             {filteredProducts.map((product) => (
                                 <div key={product.id} className="group relative">
-                                    <Link to={`/product/${product.id}`}>
+                                    <Link to={`/product/${product._id}`}>
                                         <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col">
                                             <div className="relative h-64 bg-surface-alt dark:bg-gray-700 p-6 flex items-center justify-center overflow-hidden">
                                                 <img
-                                                    src={product.image}
+                                                    src={product.images && product.images.length > 0 ? product.images[0] : (product.image || '/placeholder.svg')}
                                                     alt={product.name}
+                                                    onError={(e) => { e.target.src = '/placeholder.svg'; }}
                                                     className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal transform group-hover:scale-110 transition duration-500"
                                                 />
                                             </div>
                                             <div className="p-6 flex-1 flex flex-col">
                                                 <p className="text-xs font-bold text-primary mb-2 uppercase tracking-wider">{product.category}</p>
                                                 <h3 className="text-lg font-bold text-dark dark:text-white mb-1">{product.name}</h3>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">by {product.shop}</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">by {product.shop || 'Local Vendor'}</p>
 
                                                 <div className="mt-auto flex items-center justify-between">
-                                                    <span className="text-2xl font-bold text-dark dark:text-white">${product.price.toFixed(2)}</span>
+                                                    <span className="text-2xl font-bold text-dark dark:text-white">₹{product.price.toLocaleString()}</span>
                                                     <div className="flex items-center bg-orange-50 dark:bg-gray-700 px-2 py-1 rounded-lg">
                                                         <Star className="h-4 w-4 text-secondary fill-current" />
-                                                        <span className="ml-1 text-sm font-bold text-dark dark:text-white">{product.rating}</span>
+                                                        <span className="ml-1 text-sm font-bold text-dark dark:text-white">{product.rating || 'N/A'}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -210,9 +235,9 @@ const Shop = () => {
                                                 e.preventDefault();
                                                 toggleWishlist(product);
                                             }}
-                                            className={`p-3 rounded-full shadow-md transition ${isInWishlist(product.id) ? 'bg-red-50 text-red-500' : 'bg-white dark:bg-gray-700 text-dark dark:text-white hover:bg-primary hover:text-white'}`}
+                                            className={`p-3 rounded-full shadow-md transition ${isInWishlist(product._id) ? 'bg-red-50 text-red-500' : 'bg-white dark:bg-gray-700 text-dark dark:text-white hover:bg-primary hover:text-white'}`}
                                         >
-                                            <Heart className={`h-5 w-5 ${isInWishlist(product.id) ? 'fill-current' : ''}`} />
+                                            <Heart className={`h-5 w-5 ${isInWishlist(product._id) ? 'fill-current' : ''}`} />
                                         </button>
                                         <button className="p-3 bg-white dark:bg-gray-700 rounded-full shadow-md text-dark dark:text-white hover:bg-primary hover:text-white transition">
                                             <ShoppingCart className="h-5 w-5" />

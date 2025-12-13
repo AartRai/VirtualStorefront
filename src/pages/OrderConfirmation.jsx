@@ -49,7 +49,7 @@ const OrderConfirmation = () => {
                                 <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold mb-1">Order Summary</p>
                                 <div className="flex justify-between text-sm mb-1">
                                     <span className="text-gray-600 dark:text-gray-300">Total Amount</span>
-                                    <span className="font-bold text-dark dark:text-white">${total.toFixed(2)}</span>
+                                    <span className="font-bold text-dark dark:text-white">₹{total.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-gray-600 dark:text-gray-300">Payment Method</span>

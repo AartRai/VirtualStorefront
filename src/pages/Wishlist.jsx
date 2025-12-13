@@ -35,7 +35,7 @@ const Wishlist = () => {
                                             <h3 className="text-lg font-bold text-dark dark:text-white mb-2 truncate">{product.name}</h3>
 
                                             <div className="mt-auto flex items-center justify-between">
-                                                <span className="text-2xl font-bold text-dark dark:text-white">${product.price.toFixed(2)}</span>
+                                                <span className="text-2xl font-bold text-dark dark:text-white">₹{product.price.toLocaleString()}</span>
                                                 <div className="flex items-center bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded-lg">
                                                     <Star className="h-4 w-4 text-secondary fill-current" />
                                                     <span className="ml-1 text-sm font-bold text-dark dark:text-white">{product.rating}</span>

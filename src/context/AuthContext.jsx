@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import api from '../api/axios';
 
 const AuthContext = createContext();
 
@@ -7,39 +8,40 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-
     const [addresses, setAddresses] = useState([]);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            // In a real app, you would validate the token with the backend here
-            // For now, we'll just assume the user is logged in if a token exists
-            // You might want to store user info in localStorage as well to display it
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                setUser(JSON.parse(storedUser));
-            } else {
-                setUser({ name: 'User' }); // Fallback
-            }
+        const loadUser = async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    // Verify token and get user data
+                    const res = await api.get('/auth');
+                    setUser(res.data);
 
-            // Mock addresses
-            setAddresses([
-                { id: 1, name: 'Home', street: '123 Main St', city: 'New York', state: 'NY', zip: '10001', default: true },
-                { id: 2, name: 'Work', street: '456 Business Rd', city: 'San Francisco', state: 'CA', zip: '94107', default: false },
-            ]);
-        }
-        setLoading(false);
+                    // Set real addresses from user data if available, otherwise fetch
+                    if (res.data.addresses) {
+                        setAddresses(res.data.addresses);
+                    }
+                } catch (err) {
+                    console.error('Auth check failed:', err);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    setUser(null);
+                }
+            }
+            setLoading(false);
+        };
+
+        loadUser();
     }, []);
 
     const login = (token, userData) => {
         localStorage.setItem('token', token);
-        localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-        // Mock addresses on login
-        setAddresses([
-            { id: 1, name: 'Home', street: '123 Main St', city: 'New York', state: 'NY', zip: '10001', default: true },
-        ]);
+        if (userData.addresses) {
+            setAddresses(userData.addresses);
+        }
     };
 
     const logout = () => {
@@ -49,16 +51,35 @@ export const AuthProvider = ({ children }) => {
         setAddresses([]);
     };
 
-    const addAddress = (address) => {
-        setAddresses(prev => [...prev, { ...address, id: Date.now() }]);
+    const addAddress = async (address) => {
+        try {
+            const res = await api.post('/auth/address', address);
+            setAddresses(res.data);
+            return true;
+        } catch (err) {
+            console.error("Add Address Failed:", err.response?.data?.message || err.message);
+            alert(`Error: ${err.response?.status === 404 ? 'API Route not found (Restart Server)' : (err.response?.data?.message || 'Failed to add address')}`);
+            return false;
+        }
     };
 
-    const removeAddress = (id) => {
-        setAddresses(prev => prev.filter(addr => addr.id !== id));
+    const removeAddress = async (id) => {
+        try {
+            const res = await api.delete(`/auth/address/${id}`);
+            setAddresses(res.data);
+            return true;
+        } catch (err) {
+            console.error(err);
+            return false;
+        }
+    };
+
+    const updateUser = (updatedData) => {
+        setUser(prev => ({ ...prev, ...updatedData }));
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading, addresses, addAddress, removeAddress }}>
+        <AuthContext.Provider value={{ user, login, logout, updateUser, loading, addresses, addAddress, removeAddress }}>
             {children}
         </AuthContext.Provider>
     );

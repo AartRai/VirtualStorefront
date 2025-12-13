@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, ArrowRight, Store } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 const Signup = () => {
     const [role, setRole] = useState('customer'); // 'customer' or 'business'
@@ -30,22 +31,14 @@ const Signup = () => {
         }
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: formData.name,
-                    email: formData.email,
-                    password: formData.password,
-                    role
-                }),
+            const response = await api.post('/auth/register', {
+                name: formData.name,
+                email: formData.email,
+                password: formData.password,
+                role
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Signup failed');
-            }
+            const data = response.data;
 
             // Use login from AuthContext
             login(data.token, data.user);
@@ -53,7 +46,8 @@ const Signup = () => {
             console.log('Signup successful:', data);
             navigate('/'); // Redirect to home
         } catch (err) {
-            setError(err.message);
+            console.error('Signup Error:', err);
+            setError(err.response?.data?.message || 'Signup failed');
         }
     };
 

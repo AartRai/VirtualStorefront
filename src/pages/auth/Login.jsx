@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -16,25 +17,24 @@ const Login = () => {
         setError('');
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Login failed');
-            }
+            const response = await api.post('/auth/login', { email, password });
+            const data = response.data;
 
             // Use login from AuthContext
             login(data.token, data.user);
 
             console.log('Login successful:', data);
-            navigate('/'); // Redirect to home
+
+            if (data.user.role === 'admin') {
+                navigate('/admin');
+            } else if (data.user.role === 'business') {
+                navigate('/business');
+            } else {
+                navigate('/');
+            }
         } catch (err) {
-            setError(err.message);
+            console.error('Login Error:', err);
+            setError(err.response?.data?.message || 'Login failed');
         }
     };
 

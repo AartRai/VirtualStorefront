@@ -29,7 +29,7 @@ const Cart = () => {
                     {/* Cart Items */}
                     <div className="lg:col-span-2 space-y-6">
                         {cartItems.map((item) => (
-                            <div key={item.id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-sm flex items-center hover:shadow-md transition">
+                            <div key={item._id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-sm flex items-center hover:shadow-md transition">
                                 <div className="w-24 h-24 bg-surface-alt dark:bg-gray-700 rounded-2xl p-2 flex-shrink-0">
                                     <img
                                         src={item.image}
@@ -43,27 +43,27 @@ const Cart = () => {
                                             <h3 className="text-xl font-bold text-dark dark:text-white">{item.name}</h3>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{item.shop}</p>
                                         </div>
-                                        <p className="text-xl font-bold text-primary">${(item.price * item.quantity).toFixed(2)}</p>
+                                        <p className="text-xl font-bold text-primary">₹{(item.price * item.quantity).toLocaleString()}</p>
                                     </div>
 
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-full p-1">
                                             <button
-                                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                                onClick={() => updateQuantity(item._id, item.quantity - 1)}
                                                 className="w-8 h-8 rounded-full bg-white dark:bg-gray-600 shadow-sm flex items-center justify-center text-dark dark:text-white hover:bg-gray-50 dark:hover:bg-gray-500 transition"
                                             >
                                                 <Minus className="h-4 w-4" />
                                             </button>
                                             <span className="px-4 font-bold text-dark dark:text-white">{item.quantity}</span>
                                             <button
-                                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                onClick={() => updateQuantity(item._id, item.quantity + 1)}
                                                 className="w-8 h-8 rounded-full bg-white dark:bg-gray-600 shadow-sm flex items-center justify-center text-dark dark:text-white hover:bg-gray-50 dark:hover:bg-gray-500 transition"
                                             >
                                                 <Plus className="h-4 w-4" />
                                             </button>
                                         </div>
                                         <button
-                                            onClick={() => removeFromCart(item.id)}
+                                            onClick={() => removeFromCart(item._id)}
                                             className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center text-sm font-bold px-4 py-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition"
                                         >
                                             <Trash2 className="h-4 w-4 mr-2" /> Remove
@@ -76,13 +76,13 @@ const Cart = () => {
 
                     {/* Order Summary */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-lg sticky top-24">
+                        <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-lg relative lg:sticky top-0 lg:top-24">
                             <h2 className="text-2xl font-bold text-dark dark:text-white mb-8">Order Summary</h2>
 
                             <div className="space-y-4 mb-8">
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Subtotal</span>
-                                    <span className="font-bold">${subtotal.toFixed(2)}</span>
+                                    <span className="font-bold">₹{subtotal.toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Shipping</span>
@@ -91,16 +91,16 @@ const Cart = () => {
                                 {discount > 0 && (
                                     <div className="flex justify-between text-primary font-bold">
                                         <span>Discount ({discount * 100}%)</span>
-                                        <span>-${discountAmount.toFixed(2)}</span>
+                                        <span>-₹{discountAmount.toLocaleString()}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                                     <span>Tax</span>
-                                    <span className="font-bold">$0.00</span>
+                                    <span className="font-bold">₹0.00</span>
                                 </div>
                                 <div className="border-t border-gray-100 dark:border-gray-700 pt-6 flex justify-between items-end">
                                     <span className="text-lg font-bold text-dark dark:text-white">Total</span>
-                                    <span className="text-3xl font-bold text-primary">${cartTotal.toFixed(2)}</span>
+                                    <span className="text-3xl font-bold text-primary">₹{cartTotal.toLocaleString()}</span>
                                 </div>
                             </div>
 

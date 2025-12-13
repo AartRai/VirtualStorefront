@@ -5,37 +5,51 @@ const CartContext = createContext();
 export const useCart = () => useContext(CartContext);
 
 export const CartProvider = ({ children }) => {
-    const [cartItems, setCartItems] = useState([]);
+    const [cartItems, setCartItems] = useState(() => {
+        const savedCart = localStorage.getItem('cartItems');
+        return savedCart ? JSON.parse(savedCart) : [];
+    });
     const [coupon, setCoupon] = useState(null);
     const [discount, setDiscount] = useState(0);
 
     const addToCart = (product) => {
         setCartItems((prevItems) => {
-            const existingItem = prevItems.find((item) => item.id === product.id);
+            const existingItem = prevItems.find((item) => item._id === product._id);
+            let newItems;
             if (existingItem) {
-                return prevItems.map((item) =>
-                    item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+                newItems = prevItems.map((item) =>
+                    item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item
                 );
+            } else {
+                newItems = [...prevItems, { ...product, quantity: 1 }];
             }
-            return [...prevItems, { ...product, quantity: 1 }];
+            localStorage.setItem('cartItems', JSON.stringify(newItems));
+            return newItems;
         });
     };
 
     const removeFromCart = (productId) => {
-        setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
+        setCartItems((prevItems) => {
+            const newItems = prevItems.filter((item) => item._id !== productId);
+            localStorage.setItem('cartItems', JSON.stringify(newItems));
+            return newItems;
+        });
     };
 
     const updateQuantity = (productId, quantity) => {
         if (quantity < 1) return;
-        setCartItems((prevItems) =>
-            prevItems.map((item) =>
-                item.id === productId ? { ...item, quantity } : item
-            )
-        );
+        setCartItems((prevItems) => {
+            const newItems = prevItems.map((item) =>
+                item._id === productId ? { ...item, quantity } : item
+            );
+            localStorage.setItem('cartItems', JSON.stringify(newItems));
+            return newItems;
+        });
     };
 
     const clearCart = () => {
         setCartItems([]);
+        localStorage.removeItem('cartItems');
         setCoupon(null);
         setDiscount(0);
     };

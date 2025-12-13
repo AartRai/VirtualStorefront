@@ -1,10 +1,38 @@
 import Hero from '../components/Hero';
 import CategoryCarousel from '../components/CategoryCarousel';
 import ProductSection from '../components/ProductSection';
-import { products } from '../data/mockData';
+import { useState, useEffect } from 'react';
+import api from '../api/axios';
+import { Loader } from 'lucide-react';
 
 const Home = () => {
-    // Filter products by category
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                const res = await api.get('/products');
+                setProducts(res.data);
+                setLoading(false);
+            } catch (err) {
+                console.error("Error fetching products:", err);
+                setLoading(false);
+            }
+        };
+        fetchProducts();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader className="w-12 h-12 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    // Filter products by category (using strict or loose matching depending on data)
+    // Note: Backend verification script created 'Electronics'.
     const fashionProducts = products.filter(p => p.category === 'Fashion').slice(0, 4);
     const electronicsProducts = products.filter(p => p.category === 'Electronics').slice(0, 4);
     const homeProducts = products.filter(p => p.category === 'Home').slice(0, 4);
@@ -16,10 +44,10 @@ const Home = () => {
             <CategoryCarousel />
 
             {/* Category Sections */}
-            <ProductSection title="Trending Fashion" products={fashionProducts} categoryLink="/shop?category=Fashion" />
-            <ProductSection title="Latest Electronics" products={electronicsProducts} categoryLink="/shop?category=Electronics" />
-            <ProductSection title="Home Essentials" products={homeProducts} categoryLink="/shop?category=Home" />
-            <ProductSection title="Beauty & Wellness" products={beautyProducts} categoryLink="/shop?category=Beauty" />
+            {fashionProducts.length > 0 && <ProductSection title="Trending Fashion" products={fashionProducts} categoryLink="/shop?category=Fashion" />}
+            {electronicsProducts.length > 0 && <ProductSection title="Latest Electronics" products={electronicsProducts} categoryLink="/shop?category=Electronics" />}
+            {homeProducts.length > 0 && <ProductSection title="Home Essentials" products={homeProducts} categoryLink="/shop?category=Home" />}
+            {beautyProducts.length > 0 && <ProductSection title="Beauty & Wellness" products={beautyProducts} categoryLink="/shop?category=Beauty" />}
 
             {/* Testimonials Section */}
             <section className="py-16 bg-white dark:bg-gray-800 mt-12 transition-colors duration-300">

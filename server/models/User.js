@@ -14,6 +14,27 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    phone: {
+        type: String,
+        default: '',
+    },
+    avatar: {
+        type: String,
+        default: ''
+    },
+    businessAddress: {
+        type: String,
+        default: ''
+    },
+    addresses: [{
+        name: String,
+        street: String,
+        city: String,
+        state: String,
+        zip: String,
+        mobile: String,
+        default: { type: Boolean, default: false }
+    }],
     role: {
         type: String,
         enum: ['customer', 'business', 'admin'],
@@ -23,6 +44,8 @@ const UserSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
 });
 
 module.exports = mongoose.model('User', UserSchema);
