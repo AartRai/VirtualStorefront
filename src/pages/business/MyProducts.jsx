@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const MyProducts = () => {
@@ -62,7 +63,7 @@ const MyProducts = () => {
             setProducts(products.filter(p => p._id !== id));
         } catch (err) {
             console.error("Delete error:", err);
-            alert(err.response?.data?.message || 'Error deleting product');
+            toast.error(err.response?.data?.message || 'Error deleting product');
         }
     };
 

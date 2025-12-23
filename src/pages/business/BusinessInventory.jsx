@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, AlertTriangle, Layers, Edit, History, Save, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const BusinessInventory = () => {
@@ -42,9 +43,9 @@ const BusinessInventory = () => {
             setLogs([res.data.log, ...logs]);
             setSelectedProduct(null);
             setStockChange(0);
-            alert("Stock updated successfully");
+            toast.success("Stock updated successfully");
         } catch (err) {
-            alert("Failed to update stock");
+            toast.error("Failed to update stock");
         }
     };
 

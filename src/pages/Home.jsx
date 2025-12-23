@@ -13,7 +13,7 @@ const Home = () => {
         const fetchProducts = async () => {
             try {
                 const res = await api.get('/products');
-                setProducts(res.data);
+                setProducts(res.data.products || []);
                 setLoading(false);
             } catch (err) {
                 console.error("Error fetching products:", err);
@@ -37,6 +37,7 @@ const Home = () => {
     const electronicsProducts = products.filter(p => p.category === 'Electronics').slice(0, 4);
     const homeProducts = products.filter(p => p.category === 'Home').slice(0, 4);
     const beautyProducts = products.filter(p => p.category === 'Beauty').slice(0, 4);
+    const topOffers = products.filter(p => p.originalPrice && p.originalPrice > p.price).slice(0, 4);
 
     return (
         <div className="bg-gray-50 dark:bg-gray-900 pb-20 transition-colors duration-300">
@@ -44,6 +45,7 @@ const Home = () => {
             <CategoryCarousel />
 
             {/* Category Sections */}
+            {topOffers.length > 0 && <ProductSection title="Top Offers" products={topOffers} categoryLink="/shop?sort=price_low" />}
             {fashionProducts.length > 0 && <ProductSection title="Trending Fashion" products={fashionProducts} categoryLink="/shop?category=Fashion" />}
             {electronicsProducts.length > 0 && <ProductSection title="Latest Electronics" products={electronicsProducts} categoryLink="/shop?category=Electronics" />}
             {homeProducts.length > 0 && <ProductSection title="Home Essentials" products={homeProducts} categoryLink="/shop?category=Home" />}

@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -23,7 +24,7 @@ const Login = () => {
             // Use login from AuthContext
             login(data.token, data.user);
 
-            console.log('Login successful:', data);
+            toast.success('Login successful! Welcome back.');
 
             if (data.user.role === 'admin') {
                 navigate('/admin');
@@ -34,7 +35,9 @@ const Login = () => {
             }
         } catch (err) {
             console.error('Login Error:', err);
-            setError(err.response?.data?.message || 'Login failed');
+            const errorMessage = err.response?.data?.message || 'Login failed';
+            toast.error(errorMessage);
+            setError(errorMessage);
         }
     };
 

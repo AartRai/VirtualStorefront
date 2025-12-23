@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 
 const AuthContext = createContext();
@@ -12,7 +13,7 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const loadUser = async () => {
-            const token = localStorage.getItem('token');
+            const token = sessionStorage.getItem('token');
             if (token) {
                 try {
                     // Verify token and get user data
@@ -25,8 +26,8 @@ export const AuthProvider = ({ children }) => {
                     }
                 } catch (err) {
                     console.error('Auth check failed:', err);
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
+                    sessionStorage.removeItem('token');
+                    sessionStorage.removeItem('user');
                     setUser(null);
                 }
             }
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (token, userData) => {
-        localStorage.setItem('token', token);
+        sessionStorage.setItem('token', token);
         setUser(userData);
         if (userData.addresses) {
             setAddresses(userData.addresses);
@@ -45,8 +46,8 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
         setUser(null);
         setAddresses([]);
     };
@@ -58,7 +59,7 @@ export const AuthProvider = ({ children }) => {
             return true;
         } catch (err) {
             console.error("Add Address Failed:", err.response?.data?.message || err.message);
-            alert(`Error: ${err.response?.status === 404 ? 'API Route not found (Restart Server)' : (err.response?.data?.message || 'Failed to add address')}`);
+            toast.error(`Error: ${err.response?.status === 404 ? 'API Route not found (Restart Server)' : (err.response?.data?.message || 'Failed to add address')}`);
             return false;
         }
     };
@@ -69,7 +70,18 @@ export const AuthProvider = ({ children }) => {
             setAddresses(res.data);
             return true;
         } catch (err) {
-            console.error(err);
+            console.error("Remove Address Error:", err.response?.data || err.message);
+            return false;
+        }
+    };
+
+    const editAddress = async (id, updatedAddress) => {
+        try {
+            const res = await api.put(`/auth/address/${id}`, updatedAddress);
+            setAddresses(res.data);
+            return true;
+        } catch (err) {
+            console.error("Edit Address Failed:", err);
             return false;
         }
     };
@@ -79,7 +91,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, updateUser, loading, addresses, addAddress, removeAddress }}>
+        <AuthContext.Provider value={{ user, login, logout, updateUser, loading, addresses, addAddress, removeAddress, editAddress }}>
             {children}
         </AuthContext.Provider>
     );

@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { MapPin, CreditCard, Truck, Wallet, Check, Plus, Trash2, Tag, Smartphone } from 'lucide-react';
 import MockPaymentModal from '../components/MockPaymentModal';
+import toast from 'react-hot-toast';
 
 const Checkout = () => {
     const { cartItems, cartTotal, subtotal, discountAmount, discount, applyCoupon, removeCoupon, coupon, clearCart } = useCart();
@@ -17,7 +18,7 @@ const Checkout = () => {
     const [couponMessage, setCouponMessage] = useState('');
     const [isAddingAddress, setIsAddingAddress] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [newAddress, setNewAddress] = useState({ name: '', street: '', city: '', state: '', zip: '' });
+    const [newAddress, setNewAddress] = useState({ name: '', street: '', city: '', state: '', zip: '', mobile: '' });
 
     // Redirect if cart is empty
     if (cartItems.length === 0) {
@@ -41,7 +42,7 @@ const Checkout = () => {
         e.preventDefault();
         addAddress({ ...newAddress, name: 'New Address' }); // Simplified
         setIsAddingAddress(false);
-        setNewAddress({ name: '', street: '', city: '', state: '', zip: '' });
+        setNewAddress({ name: '', street: '', city: '', state: '', zip: '', mobile: '' });
     };
 
     const handlePlaceOrder = async (paymentDetails = null) => {
@@ -52,11 +53,22 @@ const Checkout = () => {
                 quantity: item.quantity
             }));
 
+            // Find selected address object
+            const addressToUse = addresses.find(a => (a._id || a.id) === selectedAddress) || newAddress;
+
             const payload = {
                 items,
                 paymentInfo: paymentDetails || {
                     status: 'Pending',
                     method: paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online'
+                },
+                address: {
+                    fullName: addressToUse.name,
+                    street: addressToUse.street,
+                    city: addressToUse.city,
+                    state: addressToUse.state,
+                    zipCode: addressToUse.zip,
+                    mobile: addressToUse.mobile || user.phone || 'N/A'
                 }
             };
 
@@ -74,7 +86,7 @@ const Checkout = () => {
 
         } catch (err) {
             console.error("Order Failed:", err);
-            alert('Order Failed: ' + (err.response?.data?.message || err.message));
+            toast.error('Order Failed: ' + (err.response?.data?.message || err.message));
         }
     };
 
@@ -110,7 +122,7 @@ const Checkout = () => {
                                 {step > 1 && <button onClick={() => setStep(1)} className="text-primary text-sm font-bold">Edit</button>}
                             </div>
 
-                            {step === 1 && (
+                            {step === 1 ? (
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {addresses.map((addr) => (
@@ -144,7 +156,9 @@ const Checkout = () => {
                                                 <input required placeholder="City" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" value={newAddress.city} onChange={e => setNewAddress({ ...newAddress, city: e.target.value })} />
                                                 <input required placeholder="State" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" value={newAddress.state} onChange={e => setNewAddress({ ...newAddress, state: e.target.value })} />
                                                 <input required placeholder="ZIP Code" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" value={newAddress.zip} onChange={e => setNewAddress({ ...newAddress, zip: e.target.value })} />
+                                                <input required placeholder="Mobile Number" className="p-3 rounded-xl border-none focus:ring-2 focus:ring-primary bg-white dark:bg-gray-800 dark:text-white" value={newAddress.mobile} onChange={e => setNewAddress({ ...newAddress, mobile: e.target.value })} />
                                                 <div className="md:col-span-2 flex justify-end space-x-3 mt-2">
+
                                                     <button type="button" onClick={() => setIsAddingAddress(false)} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg">Cancel</button>
                                                     <button type="submit" className="px-6 py-2 bg-primary text-white font-bold rounded-lg hover:bg-secondary">Save Address</button>
                                                 </div>
@@ -161,6 +175,21 @@ const Checkout = () => {
                                             Continue to Payment
                                         </button>
                                     </div>
+                                </div>
+                            ) : (
+                                // Summary for Step > 1
+                                <div className="text-sm">
+                                    {(() => {
+                                        const addr = addresses.find(a => (a._id || a.id) === selectedAddress) || newAddress;
+                                        return addr ? (
+                                            <div className="text-gray-600 dark:text-gray-300">
+                                                <p className="font-bold text-dark dark:text-white">{addr.name || 'Selected Address'}</p>
+                                                <p>{addr.street}</p>
+                                                <p>{addr.city}, {addr.state} {addr.zip}</p>
+                                                {/* <p>Mobile: {addr.mobile || user.phone || 'N/A'}</p> */}
+                                            </div>
+                                        ) : <p className="text-red-500">Address not selected</p>;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -215,7 +244,7 @@ const Checkout = () => {
                                             onSuccess={handlePaymentSuccess}
                                             onFailure={(msg) => {
                                                 setShowPaymentModal(false);
-                                                alert(msg);
+                                                toast.error(msg);
                                             }}
                                         />
                                     )}

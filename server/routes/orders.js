@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Notification = require('../models/Notification');
+const Offer = require('../models/Offer');
 
 // @route   POST api/orders
 // @desc    Create a new order
@@ -50,18 +51,88 @@ router.post('/', auth, async (req, res) => {
             orderItems.push({
                 product: item.product,
                 quantity: item.quantity,
-                price: price
+                price: price,
+                name: product.name,
+                image: product.images && product.images.length > 0 ? product.images[0] : ''
             });
         }
+
+        // Apply Offer if code provided
+        const { couponCode } = req.body;
+        let discountAmount = 0;
+        let appliedOffer = null;
+
+        if (couponCode) {
+            const offer = await Offer.findOne({ code: couponCode, status: 'ACTIVE' });
+            if (offer) {
+                const now = new Date();
+                if (new Date(offer.startDate) <= now && new Date(offer.expiryDate) >= now) {
+                    if (totalAmount >= offer.minOrderValue) {
+                        // Check applicability (Simplified for now - assumes ALL or basic implementation)
+                        // For stricter checks, filter items based on offer.applicableType & offer.applicableTo
+
+                        if (offer.discountType === 'PERCENTAGE') {
+                            discountAmount = (totalAmount * offer.discountValue) / 100;
+                        } else {
+                            discountAmount = offer.discountValue;
+                        }
+
+                        // Cap discount at total amount ? No, usually not, but ensure total >= 0
+                        if (discountAmount > totalAmount) discountAmount = totalAmount;
+
+                        appliedOffer = {
+                            code: offer.code,
+                            discountValue: discountAmount
+                        };
+                    }
+                }
+            }
+        }
+
+        const finalAmount = totalAmount - discountAmount;
 
         const newOrder = new Order({
             user: req.user.id,
             items: orderItems,
-            totalAmount,
-            paymentInfo: req.body.paymentInfo || {}
+            totalAmount: finalAmount, // Use discounted amount
+            subTotal: totalAmount, // Keep track of original
+            discount: discountAmount,
+            couponApplied: appliedOffer ? appliedOffer.code : null,
+            paymentInfo: req.body.paymentInfo || {},
+            address: req.body.address
         });
 
+        // Import at the top
+        const sendEmail = require('../utils/sendEmail');
+
+        // ... inside POST / route ...
+
         const order = await newOrder.save();
+
+        // Send Order Confirmation Email
+        try {
+            const user = await require('../models/User').findById(req.user.id);
+            const message = `
+                <h1>Thank you for your order!</h1>
+                <p>Hi ${user.name},</p>
+                <p>We have received your order <strong>#${order._id.toString().slice(-6).toUpperCase()}</strong>.</p>
+                <p>Total Amount: <strong>₹${finalAmount}</strong></p>
+                <p>We will notify you when your items are shipped.</p>
+                <p>Thank you for shopping with LocalLift!</p>
+            `;
+
+            await sendEmail({
+                email: user.email,
+                subject: 'Order Confirmation - LocalLift',
+                message: `Thank you for your order #${order._id}! Total: ₹${finalAmount}`,
+                html: message
+            });
+        } catch (emailErr) {
+            console.error("Failed to send order confirmation email", emailErr);
+        }
+
+        // 3. Notify Vendors
+
 
         // 3. Notify Vendors
         // We need to identify unique vendors from the items
@@ -139,6 +210,49 @@ router.get('/', auth, async (req, res) => {
 
 const sendEmail = require('../utils/sendEmail');
 
+// @route   GET api/orders/:id
+// @desc    Get order by ID
+// @access  Private
+router.get('/:id', auth, async (req, res) => {
+    try {
+        // Validate ObjectID
+        if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const order = await Order.findById(req.params.id).populate('items.product').populate('user', 'name email');
+
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        // Check authorization: User must own the order OR be admin OR be a business owner of a product in the order
+        // For now, simplify to User Owns or Admin. Business check is complex without splitting.
+        if (order.user._id.toString() !== req.user.id && req.user.role !== 'admin') {
+            // Allow if user is a business and one of the items belongs to them
+            // This logic matches BusinessOrderDetails needs
+            if (req.user.role === 'business') {
+                let isVendor = false;
+                // items.product is populated
+                for (let item of order.items) {
+                    if (item.product && item.product.user && item.product.user.toString() === req.user.id) {
+                        isVendor = true;
+                        break;
+                    }
+                }
+                if (!isVendor) return res.status(401).json({ message: 'Not authorized' });
+            } else {
+                return res.status(401).json({ message: 'Not authorized' });
+            }
+        }
+
+        res.json(order);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 // @route   PUT api/orders/:id/cancel
 // @desc    Cancel an order
 // @access  Private
@@ -196,6 +310,18 @@ router.post('/:id/return', auth, async (req, res) => {
 
         if (order.status !== 'Delivered') {
             return res.status(400).json({ message: 'Order must be delivered to request return' });
+        }
+
+        // Check 7-day policy
+        const deliveredEvent = order.timeline.find(t => t.status === 'Delivered');
+        if (deliveredEvent) {
+            const deliveryDate = new Date(deliveredEvent.date);
+            const now = new Date();
+            const diffTime = Math.abs(now - deliveryDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 7) {
+                return res.status(400).json({ message: 'Return window closed (7 days after delivery)' });
+            }
         }
 
         order.returnStatus = 'Requested';
@@ -266,9 +392,19 @@ router.put('/:id/status', auth, async (req, res) => {
 
         await order.save();
 
-        // Notify user about status change (optional but good)
-        // const Notification = require('../models/Notification');
-        // await Notification.create({ user: order.user, message: `Your order #${order._id} is now ${status}` });
+        // Notify user via Socket
+        const io = req.app.get('io');
+        if (io) {
+            io.to(order.user.toString()).emit('orderUpdated', order);
+        }
+
+        // Notify user via Notification System
+        await Notification.create({
+            user: order.user,
+            type: 'order',
+            message: `Your order #${order._id.toString().slice(-6).toUpperCase()} status has been updated to ${status}.`,
+            link: `/dashboard/orders`
+        });
 
         res.json(order);
     } catch (err) {
@@ -302,6 +438,15 @@ router.put('/:id/return-status', auth, async (req, res) => {
         });
 
         await order.save();
+
+        // Notify user
+        await Notification.create({
+            user: order.user,
+            type: 'order',
+            message: `Your return request for order #${order._id.toString().slice(-6).toUpperCase()} has been ${returnStatus}.`,
+            link: `/dashboard/orders`
+        });
+
         res.json(order);
     } catch (err) {
         console.error(err.message);
@@ -341,6 +486,43 @@ router.put('/:id/business-status', auth, async (req, res) => {
         });
 
         await order.save();
+
+        // Send Email if status is Shipped
+        if (status === 'Shipped') {
+            try {
+                // Populate user to get email
+                await order.populate('user', 'name email');
+
+                const message = `
+                    <h1>Your Order has been Shipped!</h1>
+                    <p>Hi ${order.user.name},</p>
+                    <p>Good news! Your order <strong>#${order._id.toString().slice(-6).toUpperCase()}</strong> has been shipped and is on its way.</p>
+                    <p>You can track your order status in your dashboard.</p>
+                `;
+
+                await sendEmail({
+                    email: order.user.email,
+                    subject: 'Order Shipped - LocalLift',
+                    message: `Your order #${order._id} has been shipped!`,
+                    html: message
+                });
+            } catch (err) {
+                console.error("Failed to send shipping email", err);
+            }
+        }
+
+        // Notify user
+        await Notification.create({
+            user: order.user, // Ensure user populated inside "Shipped" block or outside? 
+            // In business-status, we might not have populated 'user' if status != Shipped.
+            // Let's populate user if not present.
+            // Actually, best to just rely on user ID if we don't need name/email for notification. 
+            // order.user is ObjectId unless populated. Notification.create takes ID.
+            type: 'order',
+            message: `Your order #${order._id.toString().slice(-6).toUpperCase()} status has been updated to ${status}.`,
+            link: `/dashboard/orders`
+        });
+
         res.json(order);
     } catch (err) {
         console.error(err.message);
@@ -372,6 +554,104 @@ router.put('/:id/business-return', auth, async (req, res) => {
         });
 
         await order.save();
+
+        // Notify user
+        await Notification.create({
+            user: order.user,
+            type: 'order',
+            message: `Your return request for order #${order._id.toString().slice(-6).toUpperCase()} has been ${returnStatus}.`,
+            link: `/dashboard/orders`
+        });
+
+        res.json(order);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST api/orders/:id/exchange
+// @desc    Request an exchange
+// @access  Private
+router.post('/:id/exchange', auth, async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id).populate('user');
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        if (order.user._id.toString() !== req.user.id) {
+            return res.status(401).json({ message: 'Not authorized' });
+        }
+
+        if (order.status !== 'Delivered') {
+            return res.status(400).json({ message: 'Order must be delivered to request exchange' });
+        }
+
+        // Check 7-day policy
+        const deliveredEvent = order.timeline.find(t => t.status === 'Delivered');
+        if (deliveredEvent) {
+            const deliveryDate = new Date(deliveredEvent.date);
+            const now = new Date();
+            const diffTime = Math.abs(now - deliveryDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays > 7) {
+                return res.status(400).json({ message: 'Exchange window closed (7 days after delivery)' });
+            }
+        }
+
+        order.exchangeStatus = 'Requested';
+        order.exchangeReason = req.body.reason;
+        order.timeline.push({
+            status: 'Exchange Requested',
+            note: `Reason: ${req.body.reason}`
+        });
+
+        await order.save();
+
+        // Send Email (Optional/Future)
+
+        res.json(order);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   PUT api/orders/:id/business-exchange
+// @desc    Manage Exchange (Business)
+// @access  Private (Business)
+router.put('/:id/business-exchange', auth, async (req, res) => {
+    try {
+        if (req.user.role !== 'business') {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const { exchangeStatus } = req.body;
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+
+        order.exchangeStatus = exchangeStatus;
+
+        // If approved, we might want to trigger a new order flow or set status to 'Processing Exchange'
+        // For now, keeping it simple status tracking
+        if (exchangeStatus === 'Approved') {
+            order.status = 'Exchange Approved';
+        }
+
+        order.timeline.push({
+            status: `Exchange ${exchangeStatus}`,
+            note: `Exchange request ${exchangeStatus} by Vendor`
+        });
+
+        await order.save();
+
+        // Notify user
+        await Notification.create({
+            user: order.user,
+            type: 'order',
+            message: `Your exchange request for order #${order._id.toString().slice(-6).toUpperCase()} has been ${exchangeStatus}.`,
+            link: `/dashboard/orders`
+        });
+
         res.json(order);
     } catch (err) {
         console.error(err.message);

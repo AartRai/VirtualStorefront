@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, AlertTriangle, CheckCircle, XCircle, Save, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const AdminInventory = () => {
@@ -71,11 +72,11 @@ const AdminInventory = () => {
             delete newEditing[id];
             setEditingStock(newEditing);
 
-            alert("Stock updated successfully");
+            toast.success("Stock updated successfully");
 
         } catch (err) {
             console.error("Update failed", err);
-            alert("Failed to update stock");
+            toast.error("Failed to update stock");
         }
     };
 

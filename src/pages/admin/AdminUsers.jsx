@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Trash2, Mail, User, Shield } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const AdminUsers = () => {
@@ -30,7 +31,7 @@ const AdminUsers = () => {
             setUsers(users.filter(u => u._id !== id));
         } catch (err) {
             console.error("Error deleting user:", err);
-            alert("Failed to delete user");
+            toast.error("Failed to delete user");
         }
     };
 

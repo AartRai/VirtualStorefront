@@ -3,39 +3,45 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Filter, Star, ShoppingCart, Heart, Loader } from 'lucide-react';
 import api from '../api/axios';
 import { useWishlist } from '../context/WishlistContext';
+import ProductFilter from '../components/ProductFilter';
 
 const Shop = () => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const initialSearch = searchParams.get('search') || '';
     const initialCategory = searchParams.get('category') || 'All';
 
+    // State
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-    const [priceRange, setPriceRange] = useState(50000); // Increased default for INR
+    const [priceRange, setPriceRange] = useState(100000);
     const [searchQuery, setSearchQuery] = useState(initialSearch);
     const [selectedBrands, setSelectedBrands] = useState([]);
     const [minRating, setMinRating] = useState(0);
-    const [sortBy, setSortBy] = useState('popular');
+    const [sortBy, setSortBy] = useState('newest');
+    const [availableBrands, setAvailableBrands] = useState([]);
 
     const { isInWishlist, toggleWishlist } = useWishlist();
 
+    // Fetch Brands on Mount
     useEffect(() => {
-        const fetchProducts = async () => {
+        const fetchBrands = async () => {
             try {
-                setLoading(true);
-                const res = await api.get('/products');
-                setProducts(res.data);
-                setLoading(false);
+                // If /api/brands exists, use it. Otherwise derive from products.
+                // Assuming /api/brands is implemented or we fallback.
+                const res = await api.get('/brands');
+                setAvailableBrands(res.data.map(b => b.name));
             } catch (err) {
-                console.error("Error fetching products:", err);
-                setLoading(false);
+                // Fallback if brands route fails or doesn't exist as expected
+                const res = await api.get('/products?limit=100');
+                const brands = [...new Set(res.data.products.map(p => p.shop || 'Local Vendor'))].filter(Boolean);
+                setAvailableBrands(brands);
             }
         };
-
-        fetchProducts();
+        fetchBrands();
     }, []);
 
+    // Sync URL params with state
     useEffect(() => {
         setSearchQuery(searchParams.get('search') || '');
         const categoryParam = searchParams.get('category');
@@ -44,39 +50,69 @@ const Shop = () => {
         }
     }, [searchParams]);
 
-    const categories = ['All', 'Fashion', 'Electronics', 'Home', 'Beauty', 'Mobiles', 'Appliances', 'Grocery', 'Travel'];
+    // Fetch Products when Filters Change
+    useEffect(() => {
+        const fetchFilteredProducts = async () => {
+            try {
+                setLoading(true);
+                const params = {
+                    keyword: searchQuery,
+                    // specific handling for 'offers' - don't send it as a category to backend
+                    category: (selectedCategory !== 'All' && selectedCategory !== 'offers') ? selectedCategory : undefined,
+                    'price[lte]': priceRange,
+                    rating: minRating > 0 ? minRating : undefined,
+                    sort: sortBy,
+                    limit: 100 // Fetch more to allow client-side filtering if needed
+                };
 
-    // Extract unique brands (using 'shop' as brand/vendor name from real data if available, or just mock it if data structure differs, but assuming products have 'shop' or we use 'user' name)
-    // Note: The product model has 'user', but the aggregate might not populate it by default unless configured.
-    // For now, let's assume the product object structure from the API matches what we need or we adapt.
-    // Looking at Product.js model: fields are name, description, category, price, stock, images.
-    // It does NOT have 'shop' explicitly, it has 'user' (ObjectId).
-    // The previous mock data had 'shop'. We might need to populate 'user' to get the shop name, or adjust this.
-    // Let's check products.js route. It does simply Product.find().
-    // We might need to update the backend to populate 'user' to get the name, OR just disable brand filter/use static for now.
-    // For a robust fix, let's proceed with fetching, and handle missing 'shop' field gracefully (e.g., 'Unknown Shop' or exclude brand filter if empty).
+                // Handle multiple brands array
+                // Axios doesn't handle array params like ?brand=A&brand=B automatically standardly sometimes, 
+                // but usually it does as brand[]=A. Our backend expects simple `req.query.brand`.
+                // If multiple brands, we might need a custom serializer or just pick one for now.
+                // Or better, let's just pass them if backend supported $in, but current backend code:
+                // if (brand) query.shop = brand; -> Single value.
+                // So enabling multi-brand filter requires backend change OR we just take the first/loop.
+                // Simplification for now: Use the first selected brand or comma separate.
+                if (selectedBrands.length > 0) {
+                    params.brand = selectedBrands[0]; // Limitation: One brand at a time for this iteration
+                }
 
-    // Let's map 'shop' to a placeholder if missing, or use 'category' as a proxy for diversity if needed.
-    // Actually, distinct brands are cool. Let's assume for now we might not have it and just use 'Generic' or fail gracefully.
-    const brands = [...new Set(products.map(p => p.shop || 'Local Vendor'))].filter(Boolean);
+                if (searchQuery) params.keyword = searchQuery;
 
-    const filteredProducts = products.filter(product => {
-        const categoryMatch = selectedCategory === 'All' || product.category.toLowerCase() === selectedCategory.toLowerCase();
-        const priceMatch = product.price <= priceRange;
-        const searchMatch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (product.shop && product.shop.toLowerCase().includes(searchQuery.toLowerCase()));
-        const brandMatch = selectedBrands.length === 0 || (product.shop && selectedBrands.includes(product.shop)) || (!product.shop && selectedBrands.includes('Local Vendor'));
-        const ratingMatch = (product.rating || 0) >= minRating;
+                const res = await api.get('/products', { params });
 
-        return categoryMatch && priceMatch && searchMatch && brandMatch && ratingMatch;
-    }).sort((a, b) => {
-        if (sortBy === 'price-low') return a.price - b.price;
-        if (sortBy === 'price-high') return b.price - a.price;
-        // if (sortBy === 'newest') return b.id - a.id; // Real DB uses _id (timestamp) usually
-        if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
-        if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
-        return (b.reviews || 0) - (a.reviews || 0);
-    });
+                let fetchedProducts = res.data.products || res.data;
+
+                // Client-side filtering for 'Top Offers' (where originalPrice > price)
+                if (selectedCategory === 'offers') {
+                    fetchedProducts = fetchedProducts.filter(p => p.originalPrice && p.originalPrice > p.price);
+                }
+
+                setProducts(fetchedProducts);
+
+                setLoading(false);
+            } catch (err) {
+                console.error("Error fetching filtered products:", err);
+                setProducts([]); // Clear products on error
+                setLoading(false);
+            }
+        };
+
+        const debounceTimer = setTimeout(() => {
+            fetchFilteredProducts();
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(debounceTimer);
+    }, [selectedCategory, priceRange, searchQuery, selectedBrands, minRating, sortBy]);
+
+    const handleClearFilters = () => {
+        setSelectedCategory('All');
+        setPriceRange(100000);
+        setSelectedBrands([]);
+        setMinRating(0);
+        setSearchQuery('');
+        setSearchParams({});
+    };
 
     if (loading) {
         return (
@@ -91,91 +127,18 @@ const Shop = () => {
                 <div className="flex flex-col md:flex-row gap-8">
 
                     {/* Filters Sidebar */}
-                    <aside className="w-full md:w-72 flex-shrink-0">
-                        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-8 rounded-[2rem] shadow-lg relative md:sticky top-0 md:top-24">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center">
-                                    <Filter className="h-5 w-5 mr-2 text-primary" />
-                                    <h2 className="text-xl font-bold text-dark dark:text-white">Filters</h2>
-                                </div>
-                            </div>
-
-                            {/* Category Filter */}
-
-
-                            {/* Brand Filter */}
-                            {/* Brand Filter - Limited to top 5 */}
-                            <div className="mb-8">
-                                <h3 className="font-bold text-dark dark:text-white mb-4">Brands</h3>
-                                <div className="space-y-2">
-                                    {brands.slice(0, 5).map(brand => (
-                                        <label key={brand} className="flex items-center cursor-pointer group">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedBrands.includes(brand)}
-                                                onChange={() => {
-                                                    if (selectedBrands.includes(brand)) {
-                                                        setSelectedBrands(selectedBrands.filter(b => b !== brand));
-                                                    } else {
-                                                        setSelectedBrands([...selectedBrands, brand]);
-                                                    }
-                                                }}
-                                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary bg-white dark:bg-gray-700"
-                                            />
-                                            <span className="ml-3 text-sm text-gray-600 dark:text-gray-400 group-hover:text-primary transition">{brand}</span>
-                                        </label>
-                                    ))}
-                                    {brands.length > 5 && (
-                                        <div className="text-xs text-gray-400 italic pt-2">
-                                            + {brands.length - 5} more brands
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Rating Filter */}
-                            <div className="mb-8">
-                                <h3 className="font-bold text-dark dark:text-white mb-4">Rating</h3>
-                                <div className="space-y-2">
-                                    {[4, 3, 2, 1].map(rating => (
-                                        <label key={rating} className="flex items-center cursor-pointer group">
-                                            <input
-                                                type="radio"
-                                                name="rating"
-                                                checked={minRating === rating}
-                                                onChange={() => setMinRating(rating)}
-                                                className="hidden"
-                                            />
-                                            <div className={`flex items-center px-3 py-1 rounded-lg transition ${minRating === rating ? 'bg-orange-50 dark:bg-gray-700 ring-1 ring-primary' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
-                                                <div className="flex text-yellow-400 mr-2">
-                                                    {[...Array(5)].map((_, i) => (
-                                                        <Star key={i} className={`h-3 w-3 ${i < rating ? 'fill-current' : 'text-gray-300 dark:text-gray-600'}`} />
-                                                    ))}
-                                                </div>
-                                                <span className="text-sm text-gray-600 dark:text-gray-400">& Up</span>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Price Filter */}
-                            <div>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-dark dark:text-white">Max Price</h3>
-                                    <span className="text-primary font-bold">₹{priceRange.toLocaleString()}</span>
-                                </div>
-                                <input
-                                    type="range"
-                                    min="0"
-                                    max="200000"
-                                    value={priceRange}
-                                    onChange={(e) => setPriceRange(Number(e.target.value))}
-                                    className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
-                                />
-                            </div>
-                        </div>
-                    </aside>
+                    <ProductFilter
+                        selectedCategory={selectedCategory}
+                        setSelectedCategory={setSelectedCategory}
+                        priceRange={priceRange}
+                        setPriceRange={setPriceRange}
+                        selectedBrands={selectedBrands}
+                        setSelectedBrands={setSelectedBrands}
+                        minRating={minRating}
+                        setMinRating={setMinRating}
+                        availableBrands={availableBrands}
+                        onClearFilters={handleClearFilters}
+                    />
 
                     {/* Product Grid */}
                     <main className="flex-1">
@@ -183,15 +146,17 @@ const Shop = () => {
                             <h1 className="text-3xl font-bold text-dark dark:text-white">Shop All Products</h1>
 
                             <div className="flex items-center space-x-4">
-                                <span className="px-4 py-2 bg-white dark:bg-gray-800 rounded-full text-sm font-bold text-gray-500 dark:text-gray-400 shadow-sm whitespace-nowrap">{filteredProducts.length} results</span>
+                                <span className="px-4 py-2 bg-white dark:bg-gray-800 rounded-full text-sm font-bold text-gray-500 dark:text-gray-400 shadow-sm whitespace-nowrap">
+                                    {products.length} results
+                                </span>
 
                                 <select
                                     value={sortBy}
                                     onChange={(e) => setSortBy(e.target.value)}
                                     className="px-4 py-2 bg-white dark:bg-gray-800 rounded-full text-sm font-medium text-dark dark:text-white shadow-sm border-none focus:ring-2 focus:ring-primary outline-none cursor-pointer"
                                 >
-                                    <option value="popular">Popularity</option>
                                     <option value="newest">Newest First</option>
+                                    <option value="popular">Popularity</option>
                                     <option value="price-low">Price: Low to High</option>
                                     <option value="price-high">Price: High to Low</option>
                                     <option value="rating">Highest Rated</option>
@@ -200,8 +165,8 @@ const Shop = () => {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {filteredProducts.map((product) => (
-                                <div key={product.id} className="group relative">
+                            {products.map((product) => (
+                                <div key={product._id} className="group relative">
                                     <Link to={`/product/${product._id}`}>
                                         <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col">
                                             <div className="relative h-64 bg-surface-alt dark:bg-gray-700 p-6 flex items-center justify-center overflow-hidden">
@@ -221,7 +186,7 @@ const Shop = () => {
                                                     <span className="text-2xl font-bold text-dark dark:text-white">₹{product.price.toLocaleString()}</span>
                                                     <div className="flex items-center bg-orange-50 dark:bg-gray-700 px-2 py-1 rounded-lg">
                                                         <Star className="h-4 w-4 text-secondary fill-current" />
-                                                        <span className="ml-1 text-sm font-bold text-dark dark:text-white">{product.rating || 'N/A'}</span>
+                                                        <span className="ml-1 text-sm font-bold text-dark dark:text-white">{product.rating ? product.rating.toFixed(1) : 'N/A'}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -247,16 +212,11 @@ const Shop = () => {
                             ))}
                         </div>
 
-                        {filteredProducts.length === 0 && (
+                        {products.length === 0 && (
                             <div className="text-center py-12">
                                 <p className="text-gray-500 dark:text-gray-400 text-lg">No products found matching your filters.</p>
                                 <button
-                                    onClick={() => {
-                                        setSelectedCategory('All');
-                                        setPriceRange(2000);
-                                        setSelectedBrands([]);
-                                        setMinRating(0);
-                                    }}
+                                    onClick={handleClearFilters}
                                     className="mt-4 text-primary font-medium hover:underline"
                                 >
                                     Clear all filters

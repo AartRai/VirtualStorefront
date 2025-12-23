@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext'; // Updated path
 import { User, Mail, Shield, Save } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const AdminProfile = () => {
@@ -22,12 +23,12 @@ const AdminProfile = () => {
         setLoading(true);
         try {
             await api.put('/admin/profile', formData);
-            alert("Profile updated successfully");
+            toast.success("Profile updated successfully");
             // Optionally reload or update context here if needed, but for now alert is enough
             window.location.reload();
         } catch (err) {
             console.error("Error updating profile:", err);
-            alert(err.response?.data?.msg || "Failed to update profile");
+            toast.error(err.response?.data?.msg || "Failed to update profile");
         } finally {
             setLoading(false);
         }

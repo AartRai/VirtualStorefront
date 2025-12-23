@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    PieChart, Pie, Cell, Legend
-} from 'recharts';
-import {
     LayoutDashboard, TrendingUp, ShoppingBag, Users, Clock, ArrowUp, ArrowDown
 } from 'lucide-react';
+import DashboardCharts from '../../components/DashboardCharts';
 
 const BusinessOverview = () => {
     const [stats, setStats] = useState({
@@ -22,8 +19,8 @@ const BusinessOverview = () => {
     const fetchData = async () => {
         try {
             const [statsRes, productsRes] = await Promise.all([
-                api.get('/business/stats'),
-                api.get('/business/top-products')
+                api.get('/dashboard/stats'),
+                api.get('/business/top-products') // Keep this if I didn't verify dashboard has top-p completely or if business route is still used elsewhere
             ]);
             setStats(statsRes.data);
             setTopProducts(productsRes.data);
@@ -89,10 +86,10 @@ const BusinessOverview = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                    { title: 'Total Revenue', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-                    { title: 'Total Orders', value: stats.totalOrders, icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50' },
-                    { title: 'Total Customers', value: stats.totalCustomers, icon: Users, color: 'text-purple-500', bg: 'bg-purple-50' },
-                    { title: 'Pending Orders', value: stats.pendingOrders, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
+                    { title: 'Total Revenue', value: `₹${(stats.totalRevenue || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+                    { title: 'Total Orders', value: stats.totalOrders || 0, icon: ShoppingBag, color: 'text-blue-500', bg: 'bg-blue-50' },
+                    { title: 'Total Customers', value: stats.totalCustomers || 0, icon: Users, color: 'text-purple-500', bg: 'bg-purple-50' },
+                    { title: 'Pending Orders', value: stats.pendingOrders || 0, icon: Clock, color: 'text-orange-500', bg: 'bg-orange-50' },
                 ].map((stat, idx) => (
                     <div key={idx} className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start">
@@ -113,81 +110,11 @@ const BusinessOverview = () => {
             </div>
 
             {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                {/* Sales Analytic Chart */}
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-gray-800 dark:text-white">Sales Analytic</h3>
-                        <div className="flex gap-4">
-                            <div className="text-center">
-                                <p className="text-xs text-gray-400">Income</p>
-                                <p className="font-bold text-gray-800 dark:text-white">₹{stats.totalRevenue.toLocaleString()}</p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-xs text-gray-400">Expenses</p>
-                                <p className="font-bold text-gray-800 dark:text-white">₹{(stats.totalRevenue * 0.2).toLocaleString()}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="h-80 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={stats.analytics} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Sales Target Pie */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center">
-                    <h3 className="text-lg font-bold text-gray-800 dark:text-white w-full text-left mb-4">Sales Target</h3>
-                    <div className="relative h-64 w-full flex justify-center items-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={targetData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    fill="#8884d8"
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {targetData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                            </PieChart>
-                        </ResponsiveContainer>
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-3xl font-bold text-gray-800 dark:text-white">{Math.min(100, ((stats.totalRevenue / 100000) * 100)).toFixed(0)}%</span>
-                            <span className="text-xs text-gray-400">Achieved</span>
-                        </div>
-                    </div>
-                    <div className="text-center mt-2 w-full">
-                        <div className="flex justify-between text-sm mb-2">
-                            <span className="text-gray-500">Daily Target</span>
-                            <span className="font-bold">₹1,500</span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                            <span className="text-gray-500">Monthly Target</span>
-                            <span className="font-bold">₹1,00,000</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <DashboardCharts
+                salesHistory={stats.salesHistory}
+                categoryStats={stats.categoryStats}
+                topProducts={stats.topProducts} // Charts component might handle different format, let's ensure compatibility
+            />
 
             {/* Top Selling Products */}
             <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">

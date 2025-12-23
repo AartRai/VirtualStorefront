@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 import { Save, X, Upload, Image as ImageIcon, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const AddProduct = () => {
@@ -62,7 +63,7 @@ const AddProduct = () => {
     };
 
     const handleSaveDraft = () => {
-        alert('Product saved as draft!');
+        toast.success('Product saved as draft!');
     };
 
     const handleSubmit = async (e) => {
@@ -104,13 +105,13 @@ const AddProduct = () => {
             };
 
             await api.post('/products', payload);
-            alert('Product published successfully!');
+            toast.success('Product published successfully!');
             navigate('/business/products');
         } catch (err) {
             console.error(err);
             // safe error message extraction
             const errorMessage = err.response?.data?.message || err.response?.data?.msg || err.message || 'Failed to publish product.';
-            alert(`Failed to publish product: ${errorMessage}`);
+            toast.error(`Failed to publish product: ${errorMessage}`);
         } finally {
             setLoading(false);
         }

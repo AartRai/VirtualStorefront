@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, Eye, CheckCircle, XCircle, Truck, Package, RotateCcw } from 'lucide-react';
 import api from '../../api/axios';
+import toast from 'react-hot-toast';
 import { Loader } from 'lucide-react';
 
 const AdminOrders = () => {
@@ -31,7 +32,7 @@ const AdminOrders = () => {
             setOrders(orders.map(o => o._id === id ? { ...o, status: newStatus } : o));
         } catch (err) {
             console.error("Update failed", err);
-            alert("Failed to update status");
+            toast.error("Failed to update status");
         }
     };
 
@@ -43,7 +44,7 @@ const AdminOrders = () => {
             setOrders(orders.map(o => o._id === id ? { ...o, returnStatus: action, status: action === 'Approved' ? 'Returned' : o.status } : o));
         } catch (err) {
             console.error("Return update failed", err);
-            alert("Failed to update return status");
+            toast.error("Failed to update return status");
         }
     };
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Mail, Send, Users, Activity } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const BusinessNewsletter = () => {
@@ -25,12 +26,12 @@ const BusinessNewsletter = () => {
         setLoading(true);
         try {
             await api.post('/business/newsletter/send', formData);
-            alert('Newsletter queued successfully!');
+            toast.success('Newsletter queued successfully!');
             setHistory([{ id: Date.now(), subject: formData.subject, date: new Date().toISOString().slice(0, 10), status: 'Queued', opens: 0 }, ...history]);
             setFormData({ subject: '', content: '', recipients: 'All Subscribers' });
         } catch (err) {
             console.error(err);
-            alert('Failed to send newsletter');
+            toast.error('Failed to send newsletter');
         } finally {
             setLoading(false);
         }

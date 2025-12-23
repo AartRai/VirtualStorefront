@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import CategoryBar from '../components/CategoryBar';
+import NotificationToast from '../components/NotificationToast';
 
 const MainLayout = () => {
     return (
@@ -12,6 +13,7 @@ const MainLayout = () => {
                 <Outlet />
             </main>
             <Footer />
+            <NotificationToast />
         </div>
     );
 };

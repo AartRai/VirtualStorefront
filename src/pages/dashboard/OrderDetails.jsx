@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft, Package, MapPin, CreditCard } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 
@@ -9,6 +10,7 @@ const OrderDetails = () => {
     const [loading, setLoading] = useState(true);
     const [showCancelModal, setShowCancelModal] = useState(false);
     const [showReturnModal, setShowReturnModal] = useState(false);
+    const [showExchangeModal, setShowExchangeModal] = useState(false);
     const [reason, setReason] = useState('');
 
     useEffect(() => {
@@ -17,42 +19,54 @@ const OrderDetails = () => {
 
     const fetchOrder = async () => {
         try {
-            // Optimistic approach: try specific route if exists, else fetch all
-            // For now assuming we fetch all as per previous logic, but ideally we should have GET /api/orders/:id
-            // Let's stick to existing logic but refactor to function for re-use
-            const res = await api.get('/orders');
-            const found = res.data.find(o => o._id === id);
-            setOrder(found);
+            console.log("Fetching order details for ID:", id);
+            const res = await api.get(`/orders/${id}`);
+            console.log("Order fetched:", res.data);
+            setOrder(res.data);
         } catch (err) {
             console.error("Error fetching order", err);
+            // Optionally set error state to display content
         } finally {
             setLoading(false);
         }
     };
 
     const handleCancel = async () => {
-        if (!reason) return alert('Please provide a reason');
+        if (!reason) return toast.error('Please provide a reason');
         try {
             await api.put(`/orders/${order._id}/cancel`, { reason });
-            alert('Order Cancelled');
+            toast.success('Order Cancelled');
             setShowCancelModal(false);
             setReason('');
             fetchOrder(); // Refresh data
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to cancel order');
+            toast.error(err.response?.data?.message || 'Failed to cancel order');
         }
     };
 
     const handleReturn = async () => {
-        if (!reason) return alert('Please provide a reason');
+        if (!reason) return toast.error('Please provide a reason');
         try {
             await api.post(`/orders/${order._id}/return`, { reason });
-            alert('Return Requested Successfully');
+            toast.success('Return Requested Successfully');
             setShowReturnModal(false);
             setReason('');
             fetchOrder();
         } catch (err) {
-            alert(err.response?.data?.message || 'Failed to request return');
+            toast.error(err.response?.data?.message || 'Failed to request return');
+        }
+    };
+
+    const handleExchange = async () => {
+        if (!reason) return toast.error('Please provide a reason');
+        try {
+            await api.post(`/orders/${order._id}/exchange`, { reason });
+            toast.success('Exchange Requested Successfully');
+            setShowExchangeModal(false);
+            setReason('');
+            fetchOrder();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to request exchange');
         }
     };
 
@@ -97,7 +111,7 @@ const OrderDetails = () => {
                         <tbody>
                             ${order.items.map(item => `
                                 <tr>
-                                    <td>${typeof item.product === 'object' ? (item.product.name || 'Product') : 'Product'}</td>
+                                    <td>${item.product && typeof item.product === 'object' ? (item.product.name || 'Product') : 'Product'}</td>
                                     <td>${item.quantity}</td>
                                     <td>₹${item.price}</td>
                                     <td>₹${item.price * item.quantity}</td>
@@ -121,6 +135,25 @@ const OrderDetails = () => {
     const steps = ['Pending', 'Processing', 'Shipped', 'Delivered'];
     const currentStep = steps.indexOf(order.status) !== -1 ? steps.indexOf(order.status) : (order.status === 'Cancelled' ? -1 : 0);
 
+    // Check 7-day window
+    let isWithinWindow = false;
+    if (order.status === 'Delivered') {
+        const deliveredEvent = order.timeline?.find(t => t.status === 'Delivered');
+        if (deliveredEvent) {
+            const deliveryDate = new Date(deliveredEvent.date);
+            const now = new Date();
+            const diffTime = Math.abs(now - deliveryDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            isWithinWindow = diffDays <= 7;
+        } else {
+            // Fallback if timeline missing: assume just delivered or check updatedAt? 
+            // Better to match backend check - if no timeline, it might fail backend check too so default false or true?
+            // Let's default to true if freshly delivered but timeline might be async? 
+            // No, timeline is pushed on status update. If missing, assume data data error but permissive for UI (backend will catch).
+            isWithinWindow = true;
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -136,10 +169,21 @@ const OrderDetails = () => {
                             Cancel Order
                         </button>
                     )}
-                    {order.status === 'Delivered' && order.returnStatus === 'None' && (
-                        <button onClick={() => setShowReturnModal(true)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
-                            Return Items
-                        </button>
+                    {order.status === 'Delivered' && order.returnStatus === 'None' && order.exchangeStatus === 'None' && (
+                        isWithinWindow ? (
+                            <>
+                                <button onClick={() => setShowReturnModal(true)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200">
+                                    Return Items
+                                </button>
+                                <button onClick={() => setShowExchangeModal(true)} className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100">
+                                    Exchange Items
+                                </button>
+                            </>
+                        ) : (
+                            <span className="text-xs text-gray-400 font-medium px-2 py-2 border border-gray-200 rounded-lg">
+                                Return window closed
+                            </span>
+                        )
                     )}
                 </div>
             </div>
@@ -151,8 +195,8 @@ const OrderDetails = () => {
                         <p className="text-gray-500 text-sm">Placed on {new Date(order.createdAt).toLocaleDateString()}</p>
                     </div>
                     <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                            order.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                                'bg-blue-100 text-blue-700'
+                        order.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
                         }`}>
                         {order.status}
                     </span>
@@ -187,6 +231,12 @@ const OrderDetails = () => {
                         <div className="mt-6 p-4 bg-yellow-50 text-yellow-800 rounded-xl">
                             <strong>Return Status:</strong> {order.returnStatus}
                             {order.returnReason && <p className="text-sm mt-1">Reason: {order.returnReason}</p>}
+                        </div>
+                    )}
+                    {order.exchangeStatus !== 'None' && (
+                        <div className="mt-6 p-4 bg-blue-50 text-blue-800 rounded-xl">
+                            <strong>Exchange Status:</strong> {order.exchangeStatus}
+                            {order.exchangeReason && <p className="text-sm mt-1">Reason: {order.exchangeReason}</p>}
                         </div>
                     )}
                 </div>
@@ -230,11 +280,11 @@ const OrderDetails = () => {
                             <div key={idx} className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-16 bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
-                                        <img src={item.image || (typeof item.product === 'object' ? item.product.images?.[0] : '') || '/placeholder.svg'} alt="Product" className="w-full h-full object-contain" />
+                                        <img src={item.image || (item.product && typeof item.product === 'object' ? item.product.images?.[0] : '') || '/placeholder.svg'} alt="Product" className="w-full h-full object-contain" />
                                     </div>
                                     <div>
                                         <p className="font-bold text-dark dark:text-white">
-                                            {typeof item.product === 'object' ? (item.product.name || 'Product Details Unavailable') : `Product ID: ${item.product}`}
+                                            {item.product && typeof item.product === 'object' ? (item.product.name || 'Product Details Unavailable') : `Product ID: ${item.product || 'Unknown'}`}
                                         </p>
                                         <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                                     </div>
@@ -293,6 +343,31 @@ const OrderDetails = () => {
                         <div className="flex justify-end gap-3">
                             <button onClick={() => setShowReturnModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
                             <button onClick={handleReturn} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Submit Request</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Exchange Modal */}
+            {showExchangeModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <h3 className="text-xl font-bold mb-4 text-dark dark:text-white">Request Exchange</h3>
+                        <p className="text-gray-500 mb-4 text-sm">Why do you want to exchange this item?</p>
+                        <select
+                            className="w-full border rounded-lg p-3 mb-4 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                        >
+                            <option value="">Select a reason</option>
+                            <option value="Size Issue">Size Issue</option>
+                            <option value="Color Issue">Color Issue</option>
+                            <option value="Minor Defect">Minor Defect</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={() => setShowExchangeModal(false)} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg">Cancel</button>
+                            <button onClick={handleExchange} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Request Exchange</button>
                         </div>
                     </div>
                 </div>

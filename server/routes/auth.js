@@ -57,19 +57,24 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
+    console.log('Login attempt for:', email);
 
     try {
         // Check user
         let user = await User.findOne({ email });
         if (!user) {
+            console.log('User not found');
             return res.status(400).json({ message: 'Invalid Credentials' });
         }
+        console.log('User found:', user.email);
 
         // Check password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            console.log('Password mismatch');
             return res.status(400).json({ message: 'Invalid Credentials' });
         }
+        console.log('Password matched');
 
         // Create token
         const payload = {
@@ -85,7 +90,16 @@ router.post('/login', async (req, res) => {
             { expiresIn: '1h' },
             (err, token) => {
                 if (err) throw err;
-                res.json({ token, user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+                res.json({
+                    token,
+                    user: {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                        role: user.role,
+                        addresses: user.addresses
+                    }
+                });
             }
         );
     } catch (err) {
@@ -122,12 +136,17 @@ router.post('/forgot-password', async (req, res) => {
         await user.save();
 
         // Create reset url
-        const resetUrl = `http://localhost:5176/auth/reset-password/${resetToken}`;
+        const resetUrl = `http://localhost:5173/auth/reset-password/${resetToken}`;
 
         const message = `
-            You are receiving this email because you (or someone else) has requested the reset of a password.
-            Please make a PUT request to: \n\n ${resetUrl}
+            You have requested a password reset. Please click the link below to verify your email and set a new password:
+
+            ${resetUrl}
+
+            If you did not make this request, please ignore changed this email.
         `;
+
+        console.log("Email Message being sent:", message); // Debug log to see content
 
         try {
             await sendEmail({
@@ -235,11 +254,20 @@ router.put('/profile', auth, async (req, res) => {
 router.post('/address', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        const newAddress = req.body;
+        const { name, street, city, state, zip, mobile, default: isDefault } = req.body;
+
+        if (!name || !street || !city || !state || !zip || !mobile) {
+            return res.status(400).json({ message: 'All fields are required' });
+        }
+
+        const newAddress = { name, street, city, state, zip, mobile, default: isDefault || false };
 
         // If set as default, unset others
         if (newAddress.default) {
             user.addresses.forEach(addr => addr.default = false);
+        } else if (user.addresses.length === 0) {
+            // First address is always default
+            newAddress.default = true;
         }
 
         user.addresses.push(newAddress);
@@ -251,15 +279,69 @@ router.post('/address', auth, async (req, res) => {
     }
 });
 
-// Delete Address
-router.delete('/address/:id', auth, async (req, res) => {
+// Update Address
+router.put('/address/:id', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
-        user.addresses = user.addresses.filter(addr => addr._id.toString() !== req.params.id);
+        const addressIndex = user.addresses.findIndex(addr => addr._id.toString() === req.params.id);
+
+        if (addressIndex === -1) {
+            return res.status(404).json({ message: 'Address not found' });
+        }
+
+        const { name, street, city, state, zip, mobile, default: isDefault } = req.body;
+
+        // Update fields
+        const address = user.addresses[addressIndex];
+        if (name) address.name = name;
+        if (street) address.street = street;
+        if (city) address.city = city;
+        if (state) address.state = state;
+        if (zip) address.zip = zip;
+        if (mobile) address.mobile = mobile;
+
+        if (isDefault !== undefined) {
+            if (isDefault) {
+                user.addresses.forEach(addr => addr.default = false);
+            }
+            address.default = isDefault;
+        }
+
         await user.save();
         res.json(user.addresses);
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server error');
+    }
+});
+
+
+// Delete Address
+router.delete('/address/:id', auth, async (req, res) => {
+    try {
+        console.log(`[DEBUG] Delete Address Request - User: ${req.user.id}, AddressID: ${req.params.id}`);
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check if address exists
+        const addressExists = user.addresses.some(addr => addr._id.toString() === req.params.id);
+        if (!addressExists) {
+            console.log(`[DEBUG] Address with ID ${req.params.id} not found in user's list.`);
+            return res.status(404).json({ message: 'Address not found' });
+        }
+
+        // Use Mongoose pull to remove the subdocument by ID
+        user.addresses.pull(req.params.id);
+
+        await user.save();
+        console.log(`[DEBUG] Address deleted successfully. Remaining addresses: ${user.addresses.length}`);
+
+        res.json(user.addresses);
+    } catch (err) {
+        console.error("Delete Address Error:", err.message);
         res.status(500).send('Server error');
     }
 });

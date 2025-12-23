@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Search, Filter, Loader } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
@@ -54,7 +55,7 @@ const AdminProducts = () => {
                 setProducts(products.filter(p => p._id !== id));
             } catch (err) {
                 console.error("Error deleting product:", err);
-                alert("Failed to delete product");
+                toast.error("Failed to delete product");
             }
         }
     };
@@ -94,7 +95,7 @@ const AdminProducts = () => {
             setIsModalOpen(false);
         } catch (err) {
             console.error("Error saving product:", err);
-            alert("Failed to save product");
+            toast.error("Failed to save product");
         }
     };
 

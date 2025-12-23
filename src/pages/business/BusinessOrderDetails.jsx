@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, User, MapPin, CreditCard, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const BusinessOrderDetails = () => {
@@ -53,9 +54,9 @@ const BusinessOrderDetails = () => {
         try {
             const res = await api.put(`/orders/${id}/business-status`, { status: newStatus });
             setOrder(res.data);
-            alert(`Order updated to ${newStatus}`);
+            toast.success(`Order updated to ${newStatus}`);
         } catch (err) {
-            alert('Failed to update status');
+            toast.error('Failed to update status');
         } finally {
             setStatusUpdating(false);
         }
@@ -67,9 +68,20 @@ const BusinessOrderDetails = () => {
         try {
             const res = await api.put(`/orders/${id}/business-return`, { returnStatus: action });
             setOrder(res.data);
-            alert(`Return request ${action}`);
+            toast.success(`Return request ${action}`);
         } catch (err) {
-            alert('Failed to update return status');
+            toast.error('Failed to update return status');
+        }
+    };
+
+    const handleExchangeAction = async (action) => {
+        if (!window.confirm(`${action} exchange request?`)) return;
+        try {
+            const res = await api.put(`/orders/${id}/business-exchange`, { exchangeStatus: action });
+            setOrder(res.data);
+            toast.success(`Exchange request ${action}`);
+        } catch (err) {
+            toast.error('Failed to update exchange status');
         }
     };
 
@@ -88,8 +100,8 @@ const BusinessOrderDetails = () => {
                         <h1 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
                             Order #{order._id.slice(-6)}
                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${order.status === 'Delivered' ? 'bg-green-100 text-green-600' :
-                                    order.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
-                                        'bg-blue-100 text-blue-600'
+                                order.status === 'Cancelled' ? 'bg-red-100 text-red-600' :
+                                    'bg-blue-100 text-blue-600'
                                 }`}>
                                 {order.status}
                             </span>
@@ -115,19 +127,33 @@ const BusinessOrderDetails = () => {
                     </div>
                 </div>
 
-                {/* Return Request Section */}
-                {order.returnStatus === 'Requested' && (
+                {/* Return/Exchange Request Section */}
+                {(order.returnStatus === 'Requested' || order.exchangeStatus === 'Requested') && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 mb-6 flex items-start justify-between">
                         <div className="flex gap-3">
                             <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-1" />
                             <div>
-                                <h3 className="font-bold text-orange-800 dark:text-orange-300">Return Requested</h3>
-                                <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">Reason: {order.returnReason}</p>
+                                <h3 className="font-bold text-orange-800 dark:text-orange-300">
+                                    {order.returnStatus === 'Requested' ? 'Return Requested' : 'Exchange Requested'}
+                                </h3>
+                                <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                                    Reason: {order.returnStatus === 'Requested' ? order.returnReason : order.exchangeReason}
+                                </p>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => handleReturnAction('Approved')} className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition">Approve</button>
-                            <button onClick={() => handleReturnAction('Rejected')} className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition">Reject</button>
+                            <button
+                                onClick={() => order.returnStatus === 'Requested' ? handleReturnAction('Approved') : handleExchangeAction('Approved')}
+                                className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition"
+                            >
+                                Approve
+                            </button>
+                            <button
+                                onClick={() => order.returnStatus === 'Requested' ? handleReturnAction('Rejected') : handleExchangeAction('Rejected')}
+                                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition"
+                            >
+                                Reject
+                            </button>
                         </div>
                     </div>
                 )}

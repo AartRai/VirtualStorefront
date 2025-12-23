@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit, Layers, Tag as TagIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const AdminCategories = () => {
@@ -52,7 +53,7 @@ const AdminCategories = () => {
             setIsModalOpen(false);
         } catch (err) {
             console.error("Add failed", err);
-            alert(err.response?.data?.message || "Failed to add item");
+            toast.error(err.response?.data?.message || "Failed to add item");
         }
     };
 
@@ -70,7 +71,7 @@ const AdminCategories = () => {
             }
         } catch (err) {
             console.error("Delete failed", err);
-            alert("Failed to delete item");
+            toast.error("Failed to delete item");
         }
     };
 

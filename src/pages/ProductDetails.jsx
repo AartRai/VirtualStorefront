@@ -1,14 +1,18 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Star, ShoppingCart, Heart, ShieldCheck, RotateCcw } from 'lucide-react';
-import axios from 'axios'; // We can use direct axios or the configured api instance
+import axios from '../api/axios';
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import RecentlyViewed from '../components/RecentlyViewed';
+import ReviewList from '../components/ReviewList';
+import ReviewForm from '../components/ReviewForm';
 
 const ProductDetails = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth(); // Get user from context
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -21,18 +25,38 @@ const ProductDetails = () => {
     const [deliveryStatus, setDeliveryStatus] = useState(null); // { type: 'success' | 'error', message: string }
     const [added, setAdded] = useState(false);
 
+    // Review Logic
+    const [canReview, setCanReview] = useState(false);
+    const [reviewMessage, setReviewMessage] = useState('');
+
     // Zoom state
     const [zoomStyle, setZoomStyle] = useState({ display: 'none' });
+
+    const [reviews, setReviews] = useState([]);
 
     const { addToCart } = useCart();
     const { isInWishlist, toggleWishlist } = useWishlist();
 
     useEffect(() => {
-        const fetchProduct = async () => {
+        const fetchProductAndReviews = async () => {
             try {
                 setLoading(true);
-                const res = await axios.get(`http://localhost:5001/api/products/${id}`);
+                const res = await axios.get(`/products/${id}`);
                 setProduct(res.data);
+
+                // Fetch reviews and check if user can review
+                try {
+                    const reviewRes = await axios.get(`/reviews/product/${id}`);
+                    setReviews(reviewRes.data);
+
+                    if (user) {
+                        const checkRes = await axios.get(`/reviews/can-review/${id}`);
+                        setCanReview(checkRes.data.canReview);
+                        setReviewMessage(checkRes.data.reason || '');
+                    }
+                } catch (reviewErr) {
+                    console.error("Failed to fetch reviews", reviewErr);
+                }
 
                 // Set initial main image
                 if (res.data.images && res.data.images.length > 0) {
@@ -53,8 +77,24 @@ const ProductDetails = () => {
                 setLoading(false);
             }
         };
-        fetchProduct();
-    }, [id]);
+        fetchProductAndReviews();
+    }, [id, user]);
+
+    const handleReviewAdded = async () => {
+        try {
+            const reviewRes = await axios.get(`/reviews/product/${id}`);
+            setReviews(reviewRes.data);
+            setCanReview(false); // Once added, disable form
+            setReviewMessage('Thanks for your review!');
+
+            // Re-fetch product to update rating
+            const res = await axios.get(`/products/${id}`);
+            setProduct(res.data);
+        } catch (err) {
+            console.error("Failed to refresh reviews", err);
+        }
+    };
+
 
     const handleMouseMove = (e) => {
         const { left, top, width, height } = e.target.getBoundingClientRect();
@@ -107,8 +147,12 @@ const ProductDetails = () => {
         }
 
         // Simulate API check
+        // Generate pseudo-random days based on pincode to ensure consistency for the same code
+        // Logic: 3 days base + (last digit % 4) -> 3 to 6 days
+        const daysToAdd = 3 + (parseInt(pincode.slice(-1)) % 4);
+
         const date = new Date();
-        date.setDate(date.getDate() + 3);
+        date.setDate(date.getDate() + daysToAdd);
         const dateString = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
         setDeliveryStatus({
@@ -160,7 +204,7 @@ const ProductDetails = () => {
 
                         {/* Main Image Stage */}
                         <div
-                            className="relative flex-1 aspect-square lg:aspect-auto lg:h-[500px] border border-gray-100 dark:border-gray-800 rounded-sm overflow-hidden cursor-crosshair group flex items-center justify-center bg-white dark:bg-gray-800 transition-colors duration-300"
+                            className="relative flex-1 aspect-square lg:aspect-auto lg:h-[500px] border border-gray-100 dark:border-gray-800 rounded-sm cursor-crosshair group flex items-center justify-center bg-white dark:bg-gray-800 transition-colors duration-300"
                             onMouseMove={handleMouseMove}
                             onMouseLeave={handleMouseLeave}
                         >
@@ -229,7 +273,13 @@ const ProductDetails = () => {
                                         {product.colors.map((color, i) => (
                                             <button
                                                 key={i}
-                                                onClick={() => setSelectedColor(color)}
+                                                onClick={() => {
+                                                    setSelectedColor(color);
+                                                    // Map color index to image index if available
+                                                    if (product.images && product.images[i]) {
+                                                        setMainImage(product.images[i]);
+                                                    }
+                                                }}
                                                 className={`w-10 h-10 rounded-full border-2 focus:outline-none transition-transform ${selectedColor === color ? 'border-primary ring-2 ring-primary/20 scale-105' : 'border-gray-200 hover:border-gray-300'}`}
                                                 style={{ backgroundColor: color }}
                                                 title={color}
@@ -365,6 +415,41 @@ const ProductDetails = () => {
                     >
                         Buy Now
                     </button>
+                </div>
+
+                {/* Reviews Section */}
+                <div className="mt-12 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Ratings & Reviews</h2>
+
+                    <div className="flex flex-col md:flex-row gap-8">
+                        {/* Write Review - Left/Top */}
+                        <div className="md:w-1/3">
+                            {canReview ? (
+                                <ReviewForm productId={id} onReviewAdded={handleReviewAdded} />
+                            ) : (
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-6 rounded-lg border border-dashed border-gray-200 dark:border-gray-600 text-center">
+                                    <h3 className="font-bold text-gray-900 dark:text-white mb-2">Write a Review</h3>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                        {user ? (
+                                            reviewMessage || "You must purchase and receive this product to review it."
+                                        ) : (
+                                            <>
+                                                Please <Link to="/login" className="text-primary hover:underline">login</Link> to write a review.
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Review List - Right/Bottom */}
+                        <div className="md:w-2/3">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                                {reviews.length} {reviews.length === 1 ? 'Review' : 'Reviews'}
+                            </h3>
+                            <ReviewList reviews={reviews} />
+                        </div>
+                    </div>
                 </div>
 
                 <div className="mt-12">

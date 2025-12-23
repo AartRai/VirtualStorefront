@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Truck, CheckCircle, XCircle, RefreshCw, RotateCcw, ChevronRight, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 import api from '../../api/axios';
+import { useCart } from '../../context/CartContext';
+import { useNavigate } from 'react-router-dom';
 
 
 const Orders = () => {
     const [filter, setFilter] = useState('All');
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const { addToCart } = useCart();
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchOrders();
@@ -37,14 +42,31 @@ const Orders = () => {
                 id: order._id,
                 date: order.createdAt,
                 total: order.totalAmount,
-                status: order.status || 'Processing', // Default status if logic missing
-                items: order.items.map(i => ({
-                    // If populated:
-                    name: i.product?.name || 'Create Product to see Name',
-                    image: (i.product?.images && i.product.images.length > 0 ? i.product.images[0] : i.product?.image) || '/placeholder.svg',
-                    quantity: i.quantity,
-                    price: i.price
-                }))
+                status: order.status || 'Processing',
+                items: order.items.map(i => {
+                    const product = i.product || {};
+                    const snapshotName = i.name;
+                    const snapshotImage = i.image;
+
+                    // Use populated product details if available, otherwise fallback to snapshot, otherwise placeholder
+                    const displayName = product.name || snapshotName || 'Product Unavailable';
+
+                    let displayImage = '/placeholder.svg';
+                    if (product.images && product.images.length > 0) {
+                        displayImage = product.images[0];
+                    } else if (snapshotImage) {
+                        displayImage = snapshotImage;
+                    }
+
+                    return {
+                        _id: product._id, // Needed for Buy Again, might be null if populated product is null
+                        name: displayName,
+                        image: displayImage,
+                        quantity: i.quantity,
+                        price: i.price,
+                        isAvailable: !!product._id // Only allow buy again if product really exists
+                    };
+                })
             })));
         } catch (err) {
             console.error('Failed to fetch orders', err);
@@ -62,11 +84,38 @@ const Orders = () => {
     };
 
     const handleReturnOrder = (orderId) => {
-        alert(`Return request initiated for order #${orderId}. You will receive an email with shipping instructions.`);
+        toast.success(`Return request initiated for order #${orderId}. You will receive an email with shipping instructions.`);
     };
 
     const handleReplaceOrder = (orderId) => {
-        alert(`Replacement request initiated for order #${orderId}. We will ship a new item once we receive the original.`);
+        toast.success(`Replacement request initiated for order #${orderId}. We will ship a new item once we receive the original.`);
+    };
+
+    const handleBuyAgain = (order) => {
+        let addedCount = 0;
+        order.items.forEach(item => {
+            if (item.isAvailable) {
+                // Construct product object expected by addToCart
+                // Typically addToCart needs { _id, name, price, image, ... }
+                // We have minimal data here, usually sufficient for cart logic if it only relies on ID for checkout, 
+                // but Cart UI might show "Product Unavailable" if we don't pass full details OR Cart fetches fresh.
+                // Assuming addToCart takes the product object as stored in context.
+                // We'll pass what we have.
+                addToCart({
+                    _id: item._id,
+                    name: item.name,
+                    price: item.price,
+                    images: [item.image] // Mocking array structure
+                });
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            navigate('/cart');
+        } else {
+            toast.error('No products from this order are available.');
+        }
     };
 
     const filteredOrders = filter === 'All' ? orders : orders.filter(o => o.status === filter);
@@ -163,6 +212,13 @@ const Orders = () => {
                                     </button>
                                 </>
                             )}
+
+                            <button
+                                onClick={() => handleBuyAgain(order)}
+                                className="flex items-center px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-primary/90 transition shadow-lg shadow-primary/30"
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" /> Buy Again
+                            </button>
                         </div>
                     </div>
                 ))}

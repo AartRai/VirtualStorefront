@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useCart } from '../context/CartContext';
 
 const DashboardLayout = ({ role }) => {
     const { logout, user, loading } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const { cartCount } = useCart();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -183,13 +185,18 @@ const DashboardLayout = ({ role }) => {
 
                     {/* Right Actions */}
                     <div className="flex items-center gap-4 font-semibold text-sm">
-                        <button
+                        <Link
+                            to="/cart"
                             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative text-gray-600 dark:text-gray-300"
                             title="Cart"
                         >
                             <ShoppingCart className="h-5 w-5" />
-                            <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] w-3 h-3 flex items-center justify-center rounded-full">2</span>
-                        </button>
+                            {cartCount > 0 && (
+                                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] w-3 h-3 flex items-center justify-center rounded-full">
+                                    {cartCount}
+                                </span>
+                            )}
+                        </Link>
 
                         <button
                             onClick={toggleTheme}

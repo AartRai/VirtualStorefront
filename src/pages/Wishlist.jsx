@@ -1,9 +1,19 @@
 import { Link } from 'react-router-dom';
 import { Star, ShoppingCart, Heart, Trash2 } from 'lucide-react';
 import { useWishlist } from '../context/WishlistContext';
+import { useCart } from '../context/CartContext';
+import { toast } from 'react-hot-toast';
 
 const Wishlist = () => {
     const { wishlist, removeFromWishlist } = useWishlist();
+    const { addToCart } = useCart();
+
+    const handleAddToCart = (product) => {
+        addToCart(product);
+        toast.success('Added to cart!');
+        // Optional: Remove from wishlist after adding to cart
+        // removeFromWishlist(product._id);
+    };
 
     return (
         <div className="min-h-screen py-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
@@ -20,12 +30,12 @@ const Wishlist = () => {
                 {wishlist.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                         {wishlist.map((product) => (
-                            <div key={product.id} className="group relative">
-                                <Link to={`/product/${product.id}`}>
+                            <div key={product._id} className="group relative">
+                                <Link to={`/product/${product._id}`}>
                                     <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col">
                                         <div className="relative h-64 bg-surface-alt dark:bg-gray-700 p-6 flex items-center justify-center overflow-hidden">
                                             <img
-                                                src={product.image}
+                                                src={product.image || (product.images && product.images[0])}
                                                 alt={product.name}
                                                 className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal transform group-hover:scale-110 transition duration-500"
                                             />
@@ -50,14 +60,21 @@ const Wishlist = () => {
                                     <button
                                         onClick={(e) => {
                                             e.preventDefault();
-                                            removeFromWishlist(product.id);
+                                            removeFromWishlist(product._id);
                                         }}
                                         className="p-3 rounded-full shadow-md bg-red-50 text-red-500 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 transition"
                                         title="Remove from Wishlist"
                                     >
                                         <Trash2 className="h-5 w-5" />
                                     </button>
-                                    <button className="p-3 bg-white dark:bg-gray-700 rounded-full shadow-md text-dark dark:text-white hover:bg-primary hover:text-white dark:hover:bg-primary transition">
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleAddToCart(product);
+                                        }}
+                                        className="p-3 bg-white dark:bg-gray-700 rounded-full shadow-md text-dark dark:text-white hover:bg-primary hover:text-white dark:hover:bg-primary transition"
+                                        title="Add to Cart"
+                                    >
                                         <ShoppingCart className="h-5 w-5" />
                                     </button>
                                 </div>

@@ -32,7 +32,7 @@ const Cart = () => {
                             <div key={item._id} className="bg-white dark:bg-gray-800 p-6 rounded-[2rem] shadow-sm flex items-center hover:shadow-md transition">
                                 <div className="w-24 h-24 bg-surface-alt dark:bg-gray-700 rounded-2xl p-2 flex-shrink-0">
                                     <img
-                                        src={item.image}
+                                        src={item.image || (item.images && item.images[0])}
                                         alt={item.name}
                                         className="w-full h-full object-contain mix-blend-multiply dark:mix-blend-normal"
                                     />

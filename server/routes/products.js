@@ -20,12 +20,72 @@ router.get('/my-products', auth, async (req, res) => {
 });
 
 // @route   GET api/products
-// @desc    Get all products
+// @desc    Get all products with filtering, sorting, and search
+// @access  Public
 // @access  Public
 router.get('/', async (req, res) => {
     try {
-        const products = await Product.find({ isDeleted: { $ne: true } }).sort({ createdAt: -1 });
-        res.json(products);
+        const { keyword, category, price, rating, sort, brand, color, page = 1, limit = 20 } = req.query;
+
+        let query = { isDeleted: { $ne: true } };
+
+        // 1. Search (Keyword)
+        if (keyword) {
+            query.$or = [
+                { name: { $regex: keyword, $options: 'i' } },
+                { description: { $regex: keyword, $options: 'i' } }
+            ];
+        }
+
+        // 2. Category
+        if (category) {
+            query.category = category;
+        }
+
+        // 3. Price Range
+        if (price) {
+            query.price = {};
+            if (price.gte) query.price.$gte = Number(price.gte);
+            if (price.lte) query.price.$lte = Number(price.lte);
+        }
+
+        // 4. Rating (Average Rating)
+        if (rating) {
+            query.rating = { $gte: Number(rating) };
+        }
+
+        // 5. Brand (Shop)
+        if (brand) {
+            query.shop = brand;
+        }
+
+        // 6. Color
+        if (color) {
+            query.colors = color;
+        }
+
+        // 7. Sorting
+        let sortOption = { createdAt: -1 }; // Default: Newest
+        if (sort) {
+            if (sort === 'price-asc') sortOption = { price: 1 };
+            else if (sort === 'price-desc') sortOption = { price: -1 };
+            else if (sort === 'rating') sortOption = { rating: -1 };
+            else if (sort === 'newest') sortOption = { createdAt: -1 };
+        }
+
+        const products = await Product.find(query)
+            .sort(sortOption)
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const count = await Product.countDocuments(query);
+
+        res.json({
+            products,
+            totalPages: Math.ceil(count / limit),
+            currentPage: Number(page),
+            totalProducts: count
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

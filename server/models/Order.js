@@ -20,12 +20,24 @@ const OrderSchema = new mongoose.Schema({
             price: {
                 type: Number,
                 required: true
-            }
+            },
+            name: String,
+            image: String
         }
     ],
     totalAmount: {
         type: Number,
         required: true
+    },
+    subTotal: {
+        type: Number
+    },
+    discount: {
+        type: Number,
+        default: 0
+    },
+    couponApplied: {
+        type: String
     },
     status: {
         type: String,
@@ -48,12 +60,27 @@ const OrderSchema = new mongoose.Schema({
             note: String
         }
     ],
+    address: {
+        fullName: String,
+        street: String,
+        city: String,
+        state: String,
+        zipCode: String,
+        country: String,
+        mobile: String
+    },
     returnStatus: {
         type: String,
         enum: ['None', 'Requested', 'Approved', 'Rejected'],
         default: 'None'
     },
     returnReason: String,
+    exchangeStatus: {
+        type: String,
+        enum: ['None', 'Requested', 'Approved', 'Rejected', 'Completed'],
+        default: 'None'
+    },
+    exchangeReason: String,
     cancelReason: String,
 });
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Package, Truck, CheckCircle, Search, Filter, Eye } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const BusinessOrders = () => {
@@ -33,8 +34,114 @@ const BusinessOrders = () => {
         }
     };
 
-    const handleStatusChange = (id, newStatus) => {
-        setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    const handleStatusChange = async (id, newStatus) => {
+        try {
+            await api.put(`/orders/${id}/business-status`, { status: newStatus });
+            setOrders(orders.map(o => o.id === id || o._id === id ? { ...o, status: newStatus } : o));
+            toast.success('Order status updated');
+        } catch (err) {
+            console.error("Failed to update status", err);
+            toast.error('Failed to update status');
+        }
+    };
+
+    const printInvoice = (order) => {
+        const printWindow = window.open('', '_blank');
+        const invoiceContent = `
+            <html>
+                <head>
+                    <title>Invoice #${order._id.slice(-6).toUpperCase()}</title>
+                    <style>
+                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+                        .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+                        .logo { font-size: 24px; font-weight: bold; color: #e11d48; }
+                        .invoice-title { font-size: 32px; font-weight: bold; color: #111; text-align: right; }
+                        .details { margin-bottom: 40px; display: flex; justify-content: space-between; }
+                        .table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                        .table th { background: #f9fafb; padding: 12px; text-align: left; font-weight: 600; border-bottom: 1px solid #eee; }
+                        .table td { padding: 12px; border-bottom: 1px solid #eee; }
+                        .total-section { text-align: right; margin-top: 20px; }
+                        .total-row { display: flex; justify-content: flex-end; gap: 40px; margin-bottom: 10px; }
+                        .total-label { font-weight: 600; }
+                        .start-total { font-size: 18px; color: #111; font-weight: bold; }
+                        .footer { margin-top: 60px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div>
+                            <div class="logo">LocalLift</div>
+                            <div style="margin-top:5px; font-size: 14px; color: #666;">
+                                Support Local, Shop Global
+                            </div>
+                        </div>
+                        <div>
+                            <div class="invoice-title">INVOICE</div>
+                            <div style="text-align: right; margin-top: 5px; color: #666;">#${order._id.slice(-6).toUpperCase()}</div>
+                            <div style="text-align: right; margin-top: 5px; color: #666;">Date: ${new Date(order.createdAt).toLocaleDateString()}</div>
+                        </div>
+                    </div>
+
+                    <div class="details">
+                        <div>
+                            <h3 style="font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 10px;">Billed To</h3>
+                            <div style="font-weight: bold;">${order.user?.name || 'Customer'}</div>
+                            <div>${order.user?.email || ''}</div>
+                        </div>
+                        <div style="text-align: right;">
+                             <h3 style="font-size: 14px; text-transform: uppercase; color: #888; margin-bottom: 10px;">Payment</h3>
+                             <div class="status" style="display:inline-block; padding: 5px 10px; border-radius: 4px; background: #ecfdf5; color: #047857; font-weight: bold; font-size: 12px;">PAID</div>
+                        </div>
+                    </div>
+
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Quantity</th>
+                                <th>Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${order.items.map(item => `
+                                <tr>
+                                    <td>${item.product?.name || 'Product'}</td>
+                                    <td>${item.quantity}</td>
+                                    <td>₹${(item.price || 0).toFixed(2)}</td>
+                                    <td>₹${((item.price || 0) * item.quantity).toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="total-section">
+                        <div class="total-row">
+                            <span class="total-label">Subtotal:</span>
+                            <span>₹${(order.totalAmount + (order.discount || 0)).toFixed(2)}</span>
+                        </div>
+                        ${order.discount > 0 ? `
+                        <div class="total-row" style="color: #e11d48;">
+                            <span class="total-label">Discount:</span>
+                            <span>- ₹${order.discount.toFixed(2)}</span>
+                        </div>
+                        ` : ''}
+                        <div class="total-row start-total">
+                            <span class="total-label">Total:</span>
+                            <span>₹${order.totalAmount.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        <p>Thank you for your business!</p>
+                        <p>For any questions, please contact support@locallift.com</p>
+                    </div>
+                </body>
+            </html>
+        `;
+        printWindow.document.write(invoiceContent);
+        printWindow.document.close();
+        printWindow.print();
     };
 
     return (
@@ -77,7 +184,7 @@ const BusinessOrders = () => {
                                     <td className="px-6 py-4 text-sm font-medium text-dark dark:text-white">{order.user?.name || 'Customer'}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500">{new Date(order.createdAt).toLocaleDateString()}</td>
                                     <td className="px-6 py-4 text-sm text-center text-gray-500">{order.items.length}</td>
-                                    <td className="px-6 py-4 text-sm font-bold text-dark dark:text-white">${order.totalAmount?.toFixed(2)}</td>
+                                    <td className="px-6 py-4 text-sm font-bold text-dark dark:text-white">₹{order.totalAmount?.toFixed(2)}</td>
                                     <td className="px-6 py-4 flex gap-2 items-center">
                                         <select
                                             value={order.status}

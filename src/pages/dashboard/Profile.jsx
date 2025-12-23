@@ -1,21 +1,21 @@
 import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
-import { User, Mail, Phone, MapPin, Package, CreditCard, Heart } from 'lucide-react';
+import AddressForm from '../../components/AddressForm';
+import { User, Mail, Phone, MapPin, Package, CreditCard, Heart, Edit2, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const Profile = () => {
-    const { user, addresses, updateUser, addAddress, removeAddress } = useAuth();
+    const { user, addresses, updateUser, addAddress, removeAddress, editAddress } = useAuth();
     const { wishlist } = useWishlist();
     const [orderCount, setOrderCount] = useState(0);
     const [isEditing, setIsEditing] = useState(false);
     const [showAddressModal, setShowAddressModal] = useState(false);
+    const [editingAddressId, setEditingAddressId] = useState(null); // ID of address being edited
     const [formData, setFormData] = useState({
         name: '',
         phone: ''
-    });
-    const [newAddress, setNewAddress] = useState({
-        name: '', street: '', city: '', state: '', zip: '', mobile: '', default: false
     });
 
     useEffect(() => {
@@ -32,22 +32,45 @@ const Profile = () => {
             const res = await api.put('/auth/profile', formData);
             updateUser(res.data);
             setIsEditing(false);
-            alert('Profile updated successfully!');
+            toast.success('Profile updated successfully!');
         } catch (err) {
             console.error(err);
-            alert('Failed to update profile');
+            toast.error('Failed to update profile');
         }
     };
 
-    const handleSaveAddress = async () => {
-        const success = await addAddress(newAddress);
+    const handleAddressSubmit = async (addressData) => {
+        let success;
+        if (editingAddressId) {
+            success = await editAddress(editingAddressId, addressData);
+        } else {
+            success = await addAddress(addressData);
+        }
+
         if (success) {
             setShowAddressModal(false);
-            setNewAddress({ name: '', street: '', city: '', state: '', zip: '', mobile: '', default: false });
-            alert('Address added!');
+            setEditingAddressId(null);
+            toast.success(editingAddressId ? 'Address updated!' : 'Address added!');
         } else {
-            alert('Failed to add address');
+            toast.error('Operation failed');
         }
+    };
+
+    const handleEditAddressClick = (addr) => {
+        // Enforce _id as string, fallback to id if _id missing
+        const id = addr._id ? String(addr._id) : (addr.id ? String(addr.id) : null);
+        console.log("Editing Address ID:", id, "Raw Addr:", addr);
+        if (!id) {
+            toast.error("Error: Address ID not found on object. Cannot edit.");
+            return;
+        }
+        setEditingAddressId(id);
+        setShowAddressModal(true);
+    };
+
+    const handleAddNewClick = () => {
+        setEditingAddressId(null);
+        setShowAddressModal(true);
     };
 
     useEffect(() => {
@@ -90,9 +113,9 @@ const Profile = () => {
                                     api.put('/auth/profile', { avatar: url })
                                         .then(res => {
                                             updateUser(res.data);
-                                            alert('Avatar updated!');
+                                            toast.success('Avatar updated!');
                                         })
-                                        .catch(err => alert('Failed to update avatar'));
+                                        .catch(err => toast.error('Failed to update avatar'));
                                 }
                             }}
                             className="absolute bottom-0 right-0 p-1.5 bg-white text-primary rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
@@ -203,10 +226,10 @@ const Profile = () => {
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-dark dark:text-white">Addresses</h2>
                         <button
-                            onClick={() => setShowAddressModal(true)}
-                            className="text-primary text-sm font-bold hover:underline"
+                            onClick={handleAddNewClick}
+                            className="flex items-center gap-1 text-primary text-sm font-bold hover:underline"
                         >
-                            + Add New
+                            <Plus className="h-4 w-4" /> Add New
                         </button>
                     </div>
 
@@ -216,14 +239,40 @@ const Profile = () => {
                                 <div key={addr._id || addr.id} className="p-6 bg-orange-50 dark:bg-gray-700/50 rounded-2xl border border-orange-100 dark:border-gray-600 relative group">
                                     <div className="absolute top-4 right-4 flex gap-2">
                                         <button
-                                            onClick={() => removeAddress(addr._id || addr.id)}
-                                            className="text-red-500 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold"
+                                            onClick={() => handleEditAddressClick(addr)}
+                                            className="p-2 text-gray-500 hover:text-primary transition bg-white dark:bg-gray-800 rounded-full shadow-sm"
+                                            title="Edit"
                                         >
-                                            Delete
+                                            <Edit2 className="h-3 w-3" />
                                         </button>
-                                        <div className="text-primary bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm">
-                                            <MapPin className="h-4 w-4" />
-                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                if (window.confirm('Delete this address?')) {
+                                                    console.log("Attempting to delete address:", addr);
+                                                    const id = addr._id ? String(addr._id) : (addr.id ? String(addr.id) : null);
+                                                    if (!id) {
+                                                        toast.error("Error: Cannot delete address without ID");
+                                                        return;
+                                                    }
+                                                    console.log("[DEBUG] Deleting address with ID:", id);
+                                                    const success = await removeAddress(id);
+                                                    if (success) {
+                                                        // alert("Address deleted successfully"); // Optional: confirm success to user
+                                                    } else {
+                                                        toast.error("Failed to delete address. See console for details.");
+                                                    }
+                                                }
+                                            }}
+                                            className="p-2 text-red-500 hover:text-red-600 transition bg-white dark:bg-gray-800 rounded-full shadow-sm"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </button>
+                                        {addr.default && (
+                                            <div className="text-primary bg-white dark:bg-gray-800 p-2 rounded-full shadow-sm" title="Default Address">
+                                                <MapPin className="h-3 w-3" />
+                                            </div>
+                                        )}
                                     </div>
                                     <h3 className="font-bold text-dark dark:text-white mb-1 flex items-center gap-2">
                                         {addr.name}
@@ -248,7 +297,9 @@ const Profile = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
                         <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-gray-800 dark:text-white">Add New Address</h3>
+                            <h3 className="font-bold text-lg text-gray-800 dark:text-white">
+                                {editingAddressId ? 'Edit Address' : 'Add New Address'}
+                            </h3>
                             <button
                                 onClick={() => setShowAddressModal(false)}
                                 className="text-gray-400 hover:text-gray-600"
@@ -256,74 +307,12 @@ const Profile = () => {
                                 ×
                             </button>
                         </div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Label (e.g., Home, Work)</label>
-                                <input
-                                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                    value={newAddress.name}
-                                    onChange={e => setNewAddress({ ...newAddress, name: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Street Address</label>
-                                <input
-                                    className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                    value={newAddress.street}
-                                    onChange={e => setNewAddress({ ...newAddress, street: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">City</label>
-                                    <input
-                                        className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                        value={newAddress.city}
-                                        onChange={e => setNewAddress({ ...newAddress, city: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">State</label>
-                                    <input
-                                        className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                        value={newAddress.state}
-                                        onChange={e => setNewAddress({ ...newAddress, state: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ZIP Code</label>
-                                    <input
-                                        className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                        value={newAddress.zip}
-                                        onChange={e => setNewAddress({ ...newAddress, zip: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Mobile</label>
-                                    <input
-                                        className="w-full bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-                                        value={newAddress.mobile}
-                                        onChange={e => setNewAddress({ ...newAddress, mobile: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={newAddress.default}
-                                    onChange={e => setNewAddress({ ...newAddress, default: e.target.checked })}
-                                    className="rounded text-primary focus:ring-primary"
-                                />
-                                <span className="text-sm text-gray-600 dark:text-gray-300">Set as default address</span>
-                            </div>
-                            <button
-                                onClick={handleSaveAddress}
-                                className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary/90 transition shadow-lg shadow-primary/30"
-                            >
-                                Save Address
-                            </button>
+                        <div className="p-6">
+                            <AddressForm
+                                initialData={editingAddressId ? addresses.find(a => (a._id ? String(a._id) : String(a.id)) === editingAddressId) : null}
+                                onSave={handleAddressSubmit}
+                                onCancel={() => setShowAddressModal(false)}
+                            />
                         </div>
                     </div>
                 </div>

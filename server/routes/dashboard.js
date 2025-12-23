@@ -34,11 +34,85 @@ router.get('/stats', auth, async (req, res) => {
         const distinctUsers = await Order.distinct('user', { 'items.product': { $in: productIds } });
         const totalUsers = distinctUsers.length;
 
+        // 5. Sales History (Last 6 months)
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+        const salesHistory = await Order.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: sixMonthsAgo },
+                    'items.product': { $in: productIds }
+                }
+            },
+            { $unwind: '$items' },
+            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $group: {
+                    _id: { $month: "$createdAt" },
+                    sales: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        // 6. Sales by Category
+        // Need to join with Product collection to get category
+        const categoryStats = await Order.aggregate([
+            { $match: { 'items.product': { $in: productIds } } },
+            { $unwind: '$items' },
+            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'items.product',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            { $unwind: '$productDetails' },
+            {
+                $group: {
+                    _id: "$productDetails.category",
+                    value: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+                }
+            }
+        ]);
+
+        // 7. Top 5 Products
+        const topProducts = await Order.aggregate([
+            { $match: { 'items.product': { $in: productIds } } },
+            { $unwind: '$items' },
+            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: 'items.product',
+                    foreignField: '_id',
+                    as: 'productDetails'
+                }
+            },
+            { $unwind: '$productDetails' },
+            {
+                $group: {
+                    _id: "$productDetails.name",
+                    revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+                    quantity: { $sum: "$items.quantity" }
+                }
+            },
+            { $sort: { revenue: -1 } },
+            { $limit: 5 }
+        ]);
+
+
         res.json({
             totalProducts,
             totalOrders,
             totalSales,
-            totalUsers
+            totalUsers,
+            salesHistory,
+            categoryStats,
+            topProducts
         });
     } catch (err) {
         console.error(err.message);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { User, Mail, Phone, MapPin, Loader, Key, X, Save, Edit2, Shield } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const BusinessProfile = () => {
@@ -57,7 +58,7 @@ const BusinessProfile = () => {
             // Optional: Add toast notification here
         } catch (err) {
             console.error(err);
-            alert('Failed to update profile');
+            toast.error('Failed to update profile');
         } finally {
             setIsLoading(false);
         }
@@ -72,11 +73,11 @@ const BusinessProfile = () => {
 
     const submitPasswordChange = async () => {
         if (passwordData.newPassword !== passwordData.confirmPassword) {
-            alert("New passwords do not match");
+            toast.error("New passwords do not match");
             return;
         }
         if (passwordData.newPassword.length < 6) {
-            alert("Password must be at least 6 characters");
+            toast.error("Password must be at least 6 characters");
             return;
         }
 
@@ -85,12 +86,12 @@ const BusinessProfile = () => {
                 currentPassword: passwordData.currentPassword,
                 newPassword: passwordData.newPassword
             });
-            alert("Password updated successfully");
+            toast.success("Password updated successfully");
             setShowPasswordModal(false);
             setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
         } catch (err) {
             console.error(err);
-            alert(err.response?.data?.message || "Failed to update password");
+            toast.error(err.response?.data?.message || "Failed to update password");
         }
     };
 

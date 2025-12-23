@@ -18,6 +18,10 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
+import FAQ from './pages/FAQ';
+import ShippingPolicy from './pages/ShippingPolicy';
+import ReturnsPolicy from './pages/ReturnsPolicy';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 // Dashboard Pages
 import Profile from './pages/dashboard/Profile';
 import Orders from './pages/dashboard/Orders';
@@ -67,6 +71,10 @@ export const router = createBrowserRouter([
             { path: 'contact', element: <Contact /> },
             { path: 'about', element: <About /> },
             { path: 'profile', element: <Profile /> },
+            { path: 'faq', element: <FAQ /> },
+            { path: 'shipping', element: <ShippingPolicy /> },
+            { path: 'returns', element: <ReturnsPolicy /> },
+            { path: 'privacy', element: <PrivacyPolicy /> },
         ],
     },
     {
