@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+// Use environment variable or default to current origin for production
+const API_BASE = import.meta.env.VITE_API_URL || 
+    (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'http://localhost:5000/api'
+        : `${window.location.origin}/api`);
+
 const api = axios.create({
-    baseURL: 'http://localhost:5002/api',
+    baseURL: API_BASE,
     headers: {
         'Content-Type': 'application/json'
     }
