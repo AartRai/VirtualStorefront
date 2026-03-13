@@ -144,8 +144,13 @@ router.post('/', auth, async (req, res) => {
 
         res.json(product);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error('Error creating product:', err);
+        if (err.name === 'ValidationError') {
+            const messages = Object.values(err.errors).map(val => val.message);
+            return res.status(400).json({ message: messages.join(', ') });
+        }
+        // TEMPORARY DEBUG: Send error message to frontend
+        res.status(500).json({ message: `Server Error: ${err.message}` });
     }
 });
 

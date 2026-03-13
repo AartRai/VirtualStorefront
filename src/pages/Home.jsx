@@ -1,6 +1,7 @@
 import Hero from '../components/Hero';
 import CategoryCarousel from '../components/CategoryCarousel';
 import ProductSection from '../components/ProductSection';
+import RecommendedSection from '../components/RecommendedSection';
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { Loader } from 'lucide-react';
@@ -8,8 +9,10 @@ import { Loader } from 'lucide-react';
 const Home = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isLoggedIn, setIsLoggedIn] = useState(false);
 
     useEffect(() => {
+        setIsLoggedIn(!!sessionStorage.getItem('token'));
         const fetchProducts = async () => {
             try {
                 const res = await api.get('/products');
@@ -43,6 +46,9 @@ const Home = () => {
         <div className="bg-gray-50 dark:bg-gray-900 pb-20 transition-colors duration-300">
             <Hero />
             <CategoryCarousel />
+
+            {/* AI Recommended Section */}
+            {isLoggedIn && <RecommendedSection />}
 
             {/* Category Sections */}
             {topOffers.length > 0 && <ProductSection title="Top Offers" products={topOffers} categoryLink="/shop?sort=price_low" />}

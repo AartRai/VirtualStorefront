@@ -86,7 +86,19 @@ const Checkout = () => {
 
         } catch (err) {
             console.error("Order Failed:", err);
-            toast.error('Order Failed: ' + (err.response?.data?.message || err.message));
+            const errorMessage = err.response?.data?.message || err.message || 'Order Failed';
+
+            // Check for specific "Product not found" error
+            const match = errorMessage.match(/Product ([0-9a-fA-F]{24}) not found/);
+
+            if (match) {
+                const invalidProductId = match[1];
+                removeFromCart(invalidProductId);
+                toast.error('Item removed: The product is no longer available.');
+                return;
+            }
+
+            toast.error(errorMessage);
         }
     };
 

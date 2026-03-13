@@ -164,8 +164,9 @@ router.post('/', auth, async (req, res) => {
 
         res.json(order);
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("ORDER PLACEMENT ERROR:", err);
+        console.error(err.stack);
+        res.status(500).send('Server Error: ' + err.message);
     }
 });
 

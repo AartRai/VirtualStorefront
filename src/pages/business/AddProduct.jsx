@@ -81,15 +81,15 @@ const AddProduct = () => {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 // Since uploads are served from root of server, we need full URL or relative path
-                // Frontend is on 5174, Backend on 5001. 
+                // Frontend is on 5174, Backend on 5002. 
                 // We should store the relative path '/uploads/...' and let frontend handling prepending base URL, 
                 // OR prepend it here. Best practice: Store relative, Resolve on display.
                 // BUT for this quick fix to work with existing Components that expect full URLs or Base64:
                 // Let's prepend the API Base URL's origin.
-                // Assuming api.defaults.baseURL is http://localhost:5001/api, we want http://localhost:5001/uploads/...
+                // Assuming api.defaults.baseURL is http://localhost:5002/api, we want http://localhost:5002/uploads/...
 
                 // Construct accessible URL
-                const backendUrl = 'http://localhost:5001';
+                const backendUrl = 'http://localhost:5002';
                 imageUrl = `${backendUrl}${uploadRes.data.filePath}`;
             }
 

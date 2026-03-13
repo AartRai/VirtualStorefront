@@ -27,6 +27,7 @@ import Profile from './pages/dashboard/Profile';
 import Orders from './pages/dashboard/Orders';
 import OrderDetails from './pages/dashboard/OrderDetails';
 import Payments from './pages/dashboard/Payments';
+import CustomerAnalytics from './pages/dashboard/CustomerAnalytics';
 
 // Admin Pages
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -100,6 +101,7 @@ export const router = createBrowserRouter([
         children: [
             { index: true, element: <Profile /> },
             { path: 'profile', element: <Profile /> },
+            { path: 'analytics', element: <CustomerAnalytics /> },
             { path: 'orders', element: <Orders /> },
             { path: 'orders/:id', element: <OrderDetails /> },
             { path: 'payments', element: <Payments /> },

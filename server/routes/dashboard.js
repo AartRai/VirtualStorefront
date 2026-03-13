@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Product = require('../models/Product');
@@ -20,15 +21,26 @@ router.get('/stats', auth, async (req, res) => {
         const productIds = myProducts.map(p => p._id);
         const totalOrders = await Order.countDocuments({ 'items.product': { $in: productIds } });
 
+        // Calculate Pending Orders
+        const pendingOrders = await Order.countDocuments({
+            'items.product': { $in: productIds },
+            status: 'Pending'
+        });
+
         // 3. Total Sales (Complex aggregation or rough estimate)
         // Aggregation to sum price of ONLY items belonging to this vendor in those orders
         const salesAgg = await Order.aggregate([
-            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $match: {
+                    'items.product': { $in: productIds },
+                    status: { $ne: 'Cancelled' } // Exclude cancelled orders
+                }
+            },
             { $unwind: '$items' },
             { $match: { 'items.product': { $in: productIds } } },
             { $group: { _id: null, total: { $sum: { $multiply: ['$items.price', '$items.quantity'] } } } }
         ]);
-        const totalSales = salesAgg.length > 0 ? salesAgg[0].total : 0;
+        const totalRevenue = salesAgg.length > 0 ? salesAgg[0].total : 0;
 
         // 4. Total Users (Number of unique customers who bought my products)
         const distinctUsers = await Order.distinct('user', { 'items.product': { $in: productIds } });
@@ -42,7 +54,8 @@ router.get('/stats', auth, async (req, res) => {
             {
                 $match: {
                     createdAt: { $gte: sixMonthsAgo },
-                    'items.product': { $in: productIds }
+                    'items.product': { $in: productIds },
+                    status: { $ne: 'Cancelled' }
                 }
             },
             { $unwind: '$items' },
@@ -59,7 +72,12 @@ router.get('/stats', auth, async (req, res) => {
         // 6. Sales by Category
         // Need to join with Product collection to get category
         const categoryStats = await Order.aggregate([
-            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $match: {
+                    'items.product': { $in: productIds },
+                    status: { $ne: 'Cancelled' }
+                }
+            },
             { $unwind: '$items' },
             { $match: { 'items.product': { $in: productIds } } },
             {
@@ -81,7 +99,12 @@ router.get('/stats', auth, async (req, res) => {
 
         // 7. Top 5 Products
         const topProducts = await Order.aggregate([
-            { $match: { 'items.product': { $in: productIds } } },
+            {
+                $match: {
+                    'items.product': { $in: productIds },
+                    status: { $ne: 'Cancelled' }
+                }
+            },
             { $unwind: '$items' },
             { $match: { 'items.product': { $in: productIds } } },
             {
@@ -108,12 +131,58 @@ router.get('/stats', auth, async (req, res) => {
         res.json({
             totalProducts,
             totalOrders,
-            totalSales,
-            totalUsers,
+            totalRevenue,
+            pendingOrders,
+            totalCustomers: totalUsers,
             salesHistory,
             categoryStats,
             topProducts
         });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   GET api/dashboard/customer-spending
+// @desc    Get monthly spending history for the logged-in customer
+// @access  Private
+router.get('/customer-spending', auth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const spendingHistory = await Order.aggregate([
+            {
+                $match: {
+                    user: new mongoose.Types.ObjectId(userId),
+                    status: { $ne: 'Cancelled' }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: "$createdAt" },
+                        month: { $month: "$createdAt" }
+                    },
+                    amount: { $sum: "$totalAmount" },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { "_id.year": 1, "_id.month": 1 } }
+        ]);
+
+        // Format data for frontend (e.g., "Jan 2024")
+        const formattedData = spendingHistory.map(item => {
+            const date = new Date(item._id.year, item._id.month - 1);
+            return {
+                name: date.toLocaleString('default', { month: 'short', year: 'numeric' }),
+                amount: item.amount,
+                orders: item.count,
+                rawDate: date
+            };
+        });
+
+        res.json(formattedData);
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

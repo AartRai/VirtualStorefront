@@ -24,16 +24,8 @@ const ProductSchema = new mongoose.Schema({
     originalPrice: {
         type: Number
     },
-    colors: [
-        {
-            type: String
-        }
-    ],
-    sizes: [
-        {
-            type: String
-        }
-    ],
+    colors: [String],
+    sizes: [String],
     stock: {
         type: Number,
         default: 0
@@ -52,11 +44,7 @@ const ProductSchema = new mongoose.Schema({
     image: {
         type: String
     },
-    images: [
-        {
-            type: String
-        }
-    ],
+    images: [String],
     sku: {
         type: String,
         unique: true,

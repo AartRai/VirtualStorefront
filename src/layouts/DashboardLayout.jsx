@@ -22,6 +22,7 @@ const DashboardLayout = ({ role }) => {
 
     const customerNavItems = [
         { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+        { path: '/dashboard/analytics', label: 'Analytics', icon: TrendingUp },
         { path: '/dashboard/orders', label: 'Orders', icon: Package },
         { path: '/dashboard/profile', label: 'My Profile', icon: User },
     ];

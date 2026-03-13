@@ -61,6 +61,8 @@ app.use('/api/business', require('./routes/business'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/wishlist', require('./routes/wishlist'));
+app.use('/api/recommendations', require('./routes/recommendations'));
+
 
 // Serve Static Uploads
 const path = require('path');

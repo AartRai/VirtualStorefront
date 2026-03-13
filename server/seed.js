@@ -350,21 +350,59 @@ const seedDB = async () => {
         await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/locallift');
         console.log('MongoDB Connected for seeding');
 
-        // Find a business user or create one
-        let vendor = await User.findOne({ role: 'business' });
+        // Check for users or create defaults
+        const count = await User.countDocuments();
+        let vendor;
+
+        if (count === 0) {
+            console.log('No users found. Creating default users...');
+            const bcrypt = require('bcryptjs');
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash('password123', salt);
+
+            const users = [
+                {
+                    name: 'Admin User',
+                    email: 'admin@locallift.com',
+                    password: hashedPassword,
+                    role: 'admin',
+                    phone: '1234567890'
+                },
+                {
+                    name: 'Seller One',
+                    email: 'seller1@gmail.com',
+                    password: hashedPassword,
+                    role: 'business',
+                    phone: '9876543210',
+                    businessAddress: '123 Market St'
+                },
+                {
+                    name: 'John Doe',
+                    email: 'john@example.com',
+                    password: hashedPassword,
+                    role: 'customer',
+                    phone: '5555555555'
+                }
+            ];
+
+            await User.insertMany(users);
+            console.log('Default users created: admin, seller1, customer');
+        }
+
+        // Find the business user to assign products
+        vendor = await User.findOne({ role: 'business' });
 
         if (!vendor) {
-            console.log('No business user found. Finding any user fallback...');
+            console.log('No business user found (unexpected). using first available user.');
             vendor = await User.findOne({});
-            if (vendor) console.log(`Assigning products to user: ${vendor.name} (${vendor.role})`);
-        } else {
-            console.log(`Assigning products to business user: ${vendor.name}`);
         }
 
         if (!vendor) {
-            console.error('No users found in database. Please register a user first.');
+            console.error('CRITICAL: No users available to assign products.');
             process.exit(1);
         }
+
+        console.log(`Assigning products to vendor: ${vendor.name} (${vendor.email})`);
 
         await Product.deleteMany({}); // CLEAR existing products
         console.log('Cleared existing products');
